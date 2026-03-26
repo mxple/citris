@@ -6,52 +6,57 @@
 #include <array>
 #include <optional>
 
-// SRS kick offsets. Indexed by [from_rotation][test_index].
-// The actual kick for a from->to transition is:
-//   offset[from][i] - offset[to][i]
+// Direct SRS wall kick tables (y-up, from tetris.wiki/Super_Rotation_System).
+// Indexed by [from_rotation][test_index]. 5 tests for 90, 6 for 180.
 
-// JLSTZ offset data
-inline constexpr std::array<std::array<Vec2, 5>, 4> kOffsetJLSTZ = {{
-    {{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}},      // North
-    {{{0, 0}, {1, 0}, {1, 1}, {0, -2}, {1, -2}}},    // East
-    {{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}},      // South
-    {{{0, 0}, {-1, 0}, {-1, 1}, {0, -2}, {-1, -2}}}, // West
+// --- JLSTZ 90 kicks ---
+
+// CW: from → (from+1)%4
+inline constexpr std::array<std::array<Vec2, 5>, 4> kKickCW_JLSTZ = {{
+    {{{0, 0}, {-1, 0}, {-1, 1}, {0, -2}, {-1, -2}}}, // N→E
+    {{{0, 0}, {1, 0}, {1, -1}, {0, 2}, {1, 2}}},     // E→S
+    {{{0, 0}, {1, 0}, {1, 1}, {0, -2}, {1, -2}}},    // S→W
+    {{{0, 0}, {-1, 0}, {-1, -1}, {0, 2}, {-1, 2}}},  // W→N
 }};
 
-// I offset data
-inline constexpr std::array<std::array<Vec2, 5>, 4> kOffsetI = {{
-    {{{0, 0}, {-1, 0}, {2, 0}, {-1, 0}, {2, 0}}},     // North
-    {{{-1, 0}, {0, 0}, {0, 0}, {0, -1}, {0, 2}}},     // East
-    {{{-1, -1}, {1, -1}, {-2, -1}, {1, 0}, {-2, 0}}}, // South
-    {{{0, -1}, {0, -1}, {0, -1}, {0, 1}, {0, -2}}},   // West
+// CCW: from → (from+3)%4
+inline constexpr std::array<std::array<Vec2, 5>, 4> kKickCCW_JLSTZ = {{
+    {{{0, 0}, {1, 0}, {1, 1}, {0, -2}, {1, -2}}},    // N→W
+    {{{0, 0}, {1, 0}, {1, -1}, {0, 2}, {1, 2}}},     // E→N
+    {{{0, 0}, {-1, 0}, {-1, 1}, {0, -2}, {-1, -2}}}, // S→E
+    {{{0, 0}, {-1, 0}, {-1, -1}, {0, 2}, {-1, 2}}},  // W→S
 }};
 
-// SRS+ 180-degree kick tables.
-// Indexed by [from_rotation][test_index].
-// Source: https://tetris.wiki/SRS#180_rotation
+// --- I 90 kicks ---
 
-// JLSTZ 180 kicks (y-up: positive y = up)
+inline constexpr std::array<std::array<Vec2, 5>, 4> kKickCW_I = {{
+    {{{0, 0}, {-2, 0}, {1, 0}, {-2, -1}, {1, 2}}}, // N→E
+    {{{0, 0}, {-1, 0}, {2, 0}, {-1, 2}, {2, -1}}}, // E→S
+    {{{0, 0}, {2, 0}, {-1, 0}, {2, 1}, {-1, -2}}}, // S→W
+    {{{0, 0}, {1, 0}, {-2, 0}, {1, -2}, {-2, 1}}}, // W→N
+}};
+
+inline constexpr std::array<std::array<Vec2, 5>, 4> kKickCCW_I = {{
+    {{{0, 0}, {-1, 0}, {2, 0}, {-1, 2}, {2, -1}}}, // N→W
+    {{{0, 0}, {2, 0}, {-1, 0}, {2, 1}, {-1, -2}}}, // E→N
+    {{{0, 0}, {1, 0}, {-2, 0}, {1, -2}, {-2, 1}}}, // S→E
+    {{{0, 0}, {-2, 0}, {1, 0}, {-2, -1}, {1, 2}}}, // W→S
+}};
+
+// --- 180 kicks (SRS+) ---
+
 inline constexpr std::array<std::array<Vec2, 6>, 4> kKick180_JLSTZ = {{
-    // North -> South
-    {{{0, 0}, {1, 0}, {2, 0}, {1, -1}, {2, -1}, {-1, 0}}},
-    // East -> West
-    {{{0, 0}, {0, -1}, {0, -2}, {-1, -1}, {-1, -2}, {0, 1}}},
-    // South -> North
-    {{{0, 0}, {-1, 0}, {-2, 0}, {-1, 1}, {-2, 1}, {1, 0}}},
-    // West -> East
-    {{{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {0, -1}}},
+    {{{0, 0}, {1, 0}, {2, 0}, {1, -1}, {2, -1}, {-1, 0}}},    // N→S
+    {{{0, 0}, {0, -1}, {0, -2}, {-1, -1}, {-1, -2}, {0, 1}}}, // E→W
+    {{{0, 0}, {-1, 0}, {-2, 0}, {-1, 1}, {-2, 1}, {1, 0}}},   // S→N
+    {{{0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {0, -1}}},      // W→E
 }};
 
-// I 180 kicks (y-up: positive y = up)
 inline constexpr std::array<std::array<Vec2, 6>, 4> kKick180_I = {{
-    // North -> South
-    {{{-1, 0}, {-2, 0}, {1, 0}, {2, 0}, {0, 1}, {0, 0}}},
-    // East -> West
-    {{{0, -1}, {0, -2}, {0, 1}, {0, 2}, {-1, 0}, {0, 0}}},
-    // South -> North
-    {{{1, 0}, {2, 0}, {-1, 0}, {-2, 0}, {0, -1}, {0, 0}}},
-    // West -> East
-    {{{0, 1}, {0, 2}, {0, -1}, {0, -2}, {1, 0}, {0, 0}}},
+    {{{0, 0}, {-1, 0}, {-2, 0}, {1, 0}, {2, 0}, {0, 1}}},  // N→S
+    {{{0, 0}, {0, -1}, {0, -2}, {0, 1}, {0, 2}, {-1, 0}}}, // E→W
+    {{{0, 0}, {1, 0}, {2, 0}, {-1, 0}, {-2, 0}, {0, -1}}}, // S→N
+    {{{0, 0}, {0, 1}, {0, 2}, {0, -1}, {0, -2}, {1, 0}}},  // W→E
 }};
 
 // Try to rotate a piece on the given board.
