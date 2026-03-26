@@ -1,5 +1,13 @@
 #include "piece.h"
 
+Piece::Piece(PieceType type) : type(type) {
+  auto [xx, yy] = spawn_position(type);
+  x = xx, y = yy;
+}
+
+Piece::Piece(PieceType type, Rotation rotation, int x, int y)
+    : type(type), rotation(rotation), x(x), y(y) {}
+
 std::array<Vec2, 4> Piece::cells_relative() const {
   return kPieceCells[static_cast<int>(type)][static_cast<int>(rotation)];
 }
@@ -20,8 +28,11 @@ constexpr Vec2 spawn_position(PieceType type) {
   // 4-tall (I):         y = 17  (rows 17,18,19,20)
   // 2-tall (O):         y = 19  (rows 19,20)
   switch (type) {
-    case PieceType::I: return {3, 17};
-    case PieceType::O: return {4, 19};
-    default:           return {3, 18}; // T, S, Z, J, L
+  case PieceType::I:
+    return {3, 17};
+  case PieceType::O:
+    return {4, 19};
+  default:
+    return {3, 18}; // T, S, Z, J, L
   }
 }

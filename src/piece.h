@@ -15,6 +15,9 @@ struct Piece {
   int x = 0; // column of bounding box bottom-left
   int y = 0; // row of bounding box bottom-left (0 = :oard bottom)
 
+  Piece(PieceType type);
+  Piece(PieceType type, Rotation rotation, int x, int y);
+
   // Return the 4 cell offsets {col, row} for this piece in its current
   // rotation. Uses kPieceCells lookup.
   std::array<Vec2, 4> cells_relative() const;
