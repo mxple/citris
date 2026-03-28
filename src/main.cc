@@ -1,7 +1,9 @@
-#include "game.h"
+#include "game_manager.h"
+#include "settings.h"
 
 int main() {
-  Game game;
-  game.run();
+  Settings settings;
+  GameManager manager(GameMode::Solo, settings);
+  manager.run();
   return 0;
 }
