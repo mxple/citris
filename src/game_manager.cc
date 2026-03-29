@@ -49,33 +49,14 @@ void GameManager::run() {
       if (wake) {
         now = std::chrono::steady_clock::now();
         auto remaining = *wake - now;
-        if (remaining > kBusyWaitThreshold) {
-          auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-              remaining - kBusyWaitThreshold);
-          timeout = sf::microseconds(us.count());
-        } else {
-          // Dont bother sleeping for <kBusyWaitThreshold. Poll events while
-          // busy-waiting.
-          while (std::chrono::steady_clock::now() < *wake) {
-            if (auto event = window_.pollEvent()) {
-              dispatch_event(*event);
-            }
-          }
-          continue;
-        }
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            remaining - kBusyWaitThreshold);
+        timeout = sf::microseconds(us.count());
       }
 
-      // Block until an SFML event arrives OR timeout expires.
-      // If an event arrives early, process it and loop immediately —
-      // don't busy-wait for the timer that isn't due yet.
       if (auto event = window_.waitEvent(timeout)) {
         dispatch_event(*event);
-      } else if (wake) {
-        // Timeout expired (no event) — timer is due. Busy-wait for sub-ms
-        // precision.
-        while (std::chrono::steady_clock::now() < *wake) {
-        }
-      }
+      } 
     }
   }
 }

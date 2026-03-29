@@ -4,6 +4,9 @@ project(tetris LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
+
 find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
 
 # Game library (all src/ except main.cc) — shared between main exe and tests
