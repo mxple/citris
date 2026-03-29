@@ -61,12 +61,14 @@ private:
 
   std::vector<GameEvent> event_queue_;
 
-  std::array<std::optional<TimePoint>, static_cast<int>(TimerKind::N)> timers_{};
+  std::array<std::optional<TimePoint>, static_cast<int>(TimerKind::N)>
+      timers_{};
 
   int pending_attack_ = 0;
   bool game_over_ = false;
   bool dirty_ = true;
 
-  // Current tick time — set at the start of update(), used by all internal methods.
+  // Current tick time — set at the start of update(), used by all internal
+  // methods.
   TimePoint now_{};
 };

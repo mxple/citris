@@ -44,21 +44,30 @@ void Board::add_garbage(uint count, uint gap_col) {
 SpinKind Board::detect_spin(const Piece &piece) const {
   if (piece.type == PieceType::T) {
     // T-spin: 3-corner rule
-    bool a = filled(piece.x,     piece.y + 2); // top-left
+    bool a = filled(piece.x, piece.y + 2);     // top-left
     bool b = filled(piece.x + 2, piece.y + 2); // top-right
-    bool c = filled(piece.x,     piece.y);     // bottom-left
+    bool c = filled(piece.x, piece.y);         // bottom-left
     bool d = filled(piece.x + 2, piece.y);     // bottom-right
 
     int count = a + b + c + d;
-    if (count < 3) return SpinKind::None;
+    if (count < 3)
+      return SpinKind::None;
 
     // Front corners face the flat side of the T.
     bool front;
     switch (piece.rotation) {
-      case Rotation::North: front = a && b; break;
-      case Rotation::East:  front = b && d; break;
-      case Rotation::South: front = c && d; break;
-      case Rotation::West:  front = a && c; break;
+    case Rotation::North:
+      front = a && b;
+      break;
+    case Rotation::East:
+      front = b && d;
+      break;
+    case Rotation::South:
+      front = c && d;
+      break;
+    case Rotation::West:
+      front = a && c;
+      break;
     }
     return front ? SpinKind::TSpin : SpinKind::Mini;
   }
@@ -66,13 +75,18 @@ SpinKind Board::detect_spin(const Piece &piece) const {
   // Allspin: immobile rule (can't move in any cardinal direction)
   Piece test = piece;
   test.x -= 1;
-  if (!collides(test)) return SpinKind::None;
+  if (!collides(test))
+    return SpinKind::None;
   test.x += 2;
-  if (!collides(test)) return SpinKind::None;
-  test.x -= 1; test.y -= 1;
-  if (!collides(test)) return SpinKind::None;
+  if (!collides(test))
+    return SpinKind::None;
+  test.x -= 1;
+  test.y -= 1;
+  if (!collides(test))
+    return SpinKind::None;
   test.y += 2;
-  if (!collides(test)) return SpinKind::None;
+  if (!collides(test))
+    return SpinKind::None;
   return SpinKind::AllSpin;
 }
 

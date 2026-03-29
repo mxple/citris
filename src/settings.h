@@ -19,7 +19,8 @@ struct Settings {
   std::chrono::milliseconds das{110};
   std::chrono::milliseconds arr{0};
   std::chrono::milliseconds soft_drop_interval{0};
-  bool das_preserve_charge = true; // preserve DAS charge when direction interrupted
+  bool das_preserve_charge =
+      true; // preserve DAS charge when direction interrupted
 
   // Game tuning
   std::chrono::milliseconds gravity_interval{10000};

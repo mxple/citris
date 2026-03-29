@@ -28,6 +28,7 @@ public:
 
 private:
   std::array<uint16_t, kTotalHeight> rows_{};
-  // Per-cell color (PieceType). Only meaningful where the corresponding bit is set.
+  // Per-cell color (PieceType). Only meaningful where the corresponding bit is
+  // set.
   std::array<std::array<PieceType, kWidth>, kTotalHeight> colors_{};
 };

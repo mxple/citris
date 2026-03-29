@@ -164,7 +164,6 @@ void Game::handle_input(const InputEvent &e) {
     break;
   }
   }
-
 }
 
 void Game::handle_timer(const TimerEvent &e) {

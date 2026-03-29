@@ -31,10 +31,10 @@ void Renderer::draw_board_border() {
   float x = board_x_;
   float y = board_y_;
   sf::Color c(80, 80, 80);
-  push_quad({x - 1, y - 1}, {bw + 2, 1}, c);         // top
-  push_quad({x - 1, y + bh}, {bw + 2, 1}, c);         // bottom
-  push_quad({x - 1, y}, {1, bh}, c);                   // left
-  push_quad({x + bw, y}, {1, bh}, c);                  // right
+  push_quad({x - 1, y - 1}, {bw + 2, 1}, c);  // top
+  push_quad({x - 1, y + bh}, {bw + 2, 1}, c); // bottom
+  push_quad({x - 1, y}, {1, bh}, c);          // left
+  push_quad({x + bw, y}, {1, bh}, c);         // right
 }
 
 void Renderer::draw_board(const Board &board) {
@@ -52,7 +52,8 @@ void Renderer::draw_board(const Board &board) {
 void Renderer::draw_piece(const Piece &piece, sf::Color color) {
   for (auto &cell : piece.cells_absolute()) {
     if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1}, color);
+      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1},
+                color);
     }
   }
 }
@@ -62,7 +63,8 @@ void Renderer::draw_ghost(const Piece &ghost) {
   color.a = 60;
   for (auto &cell : ghost.cells_absolute()) {
     if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1}, color);
+      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1},
+                color);
     }
   }
 }
@@ -94,25 +96,34 @@ void Renderer::draw_game_over() {
   push_quad({0, 0}, {kWindowW, kWindowH}, sf::Color(0, 0, 0, 150));
 }
 
-void Renderer::draw_mini_piece(PieceType type, float px, float py, sf::Color color) {
+void Renderer::draw_mini_piece(PieceType type, float px, float py,
+                               sf::Color color) {
   int ti = static_cast<int>(type);
   auto &cells = kPieceCells[ti][static_cast<int>(Rotation::North)];
 
   float mini = kTileSize * 0.7f;
   for (auto &c : cells) {
-    push_quad({px + c.x * mini, py + (2 - c.y) * mini}, {mini - 1, mini - 1}, color);
+    push_quad({px + c.x * mini, py + (2 - c.y) * mini}, {mini - 1, mini - 1},
+              color);
   }
 }
 
 sf::Color Renderer::piece_color(PieceType type) const {
   switch (type) {
-  case PieceType::I: return sf::Color(135, 206, 250);
-  case PieceType::O: return sf::Color(255, 255, 0);
-  case PieceType::T: return sf::Color(186, 85, 211);
-  case PieceType::S: return sf::Color(50, 205, 50);
-  case PieceType::Z: return sf::Color(255, 105, 180);
-  case PieceType::J: return sf::Color(30, 144, 255);
-  case PieceType::L: return sf::Color(255, 165, 0);
+  case PieceType::I:
+    return sf::Color(135, 206, 250);
+  case PieceType::O:
+    return sf::Color(255, 255, 0);
+  case PieceType::T:
+    return sf::Color(186, 85, 211);
+  case PieceType::S:
+    return sf::Color(50, 205, 50);
+  case PieceType::Z:
+    return sf::Color(255, 105, 180);
+  case PieceType::J:
+    return sf::Color(30, 144, 255);
+  case PieceType::L:
+    return sf::Color(255, 165, 0);
   }
   return sf::Color::White;
 }

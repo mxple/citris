@@ -78,7 +78,8 @@ void HumanPlayer::on_key_released(sf::Keyboard::Key key) {
       das_left_.das_charged = false;
     // If Left was active and Right is still held, Right resumes.
     if (active_direction_ == Input::Left) {
-      active_direction_ = das_right_.held ? std::optional(Input::Right) : std::nullopt;
+      active_direction_ =
+          das_right_.held ? std::optional(Input::Right) : std::nullopt;
     }
     break;
   case Input::Right:
@@ -86,7 +87,8 @@ void HumanPlayer::on_key_released(sf::Keyboard::Key key) {
     if (!settings_.das_preserve_charge)
       das_right_.das_charged = false;
     if (active_direction_ == Input::Right) {
-      active_direction_ = das_left_.held ? std::optional(Input::Left) : std::nullopt;
+      active_direction_ =
+          das_left_.held ? std::optional(Input::Left) : std::nullopt;
     }
     break;
   case Input::SoftDrop:
@@ -99,7 +101,8 @@ void HumanPlayer::on_key_released(sf::Keyboard::Key key) {
 
 void HumanPlayer::tick(TimePoint now) {
   // Only process DAS/ARR for the active direction (last-pressed wins).
-  // std::cout << static_cast<int>(active_direction_.value_or(Input::Left)) << std::endl;
+  // std::cout << static_cast<int>(active_direction_.value_or(Input::Left)) <<
+  // std::endl;
   if (active_direction_ == Input::Left)
     update_das(das_left_, Input::Left, now);
   else if (active_direction_ == Input::Right)
