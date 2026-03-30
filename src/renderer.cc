@@ -59,7 +59,7 @@ void Renderer::draw_board(const Board &board) {
     for (int col = 0; col < Board::kWidth; ++col) {
       if (board.filled(col, row)) {
         auto pos = grid_to_pixel(col, row);
-        push_quad(pos, {kTileSize - 1, kTileSize - 1},
+        push_quad(pos, {kTileSize, kTileSize},
                   color_for_cell(board.cell_color(col, row)));
       }
     }
@@ -69,7 +69,7 @@ void Renderer::draw_board(const Board &board) {
 void Renderer::draw_piece(const Piece &piece, sf::Color color) {
   for (auto &cell : piece.cells_absolute()) {
     if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1},
+      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize, kTileSize},
                 color);
     }
   }
@@ -80,7 +80,7 @@ void Renderer::draw_ghost(const Piece &ghost) {
   color.a = 60;
   for (auto &cell : ghost.cells_absolute()) {
     if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize - 1, kTileSize - 1},
+      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize, kTileSize},
                 color);
     }
   }
@@ -120,7 +120,7 @@ void Renderer::draw_mini_piece(PieceType type, float px, float py,
 
   float mini = kTileSize * 0.7f;
   for (auto &c : cells) {
-    push_quad({px + c.x * mini, py + (2 - c.y) * mini}, {mini - 1, mini - 1},
+    push_quad({px + c.x * mini, py + (2 - c.y) * mini}, {mini, mini},
               color);
   }
 }
@@ -176,7 +176,6 @@ sf::Vector2f Renderer::grid_to_pixel(int col, int row) const {
 }
 
 void Renderer::push_quad(sf::Vector2f pos, sf::Vector2f size, sf::Color color) {
-  // Two triangles forming a rectangle.
   sf::Vector2f tl = pos;
   sf::Vector2f tr = {pos.x + size.x, pos.y};
   sf::Vector2f bl = {pos.x, pos.y + size.y};

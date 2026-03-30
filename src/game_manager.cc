@@ -19,14 +19,12 @@ GameManager::GameManager(GameMode mode, const Settings &settings)
 
 void GameManager::reset() {
   game_ = std::make_unique<Game>(settings_);
-  // player_ = std::make_unique<HumanPlayer>(settings_);
-  // renderer_ = std::make_unique<Renderer>(window_);
 }
 
 void GameManager::run() {
   while (window_.isOpen()) {
     auto now = std::chrono::steady_clock::now();
-    {
+    { PROFILE_SPAN("sim");
       handle_window_events();
       player_->tick(now);
       drain_player_inputs();
@@ -38,20 +36,21 @@ void GameManager::run() {
 
     // TODO skip if < 1 frame passed (wait vsync)
     if (game_->state_dirty()) {
+      PROFILE_SPAN("draw");
       renderer_->draw(game_->state());
       game_->clear_dirty();
     }
 
     // Sleep until next wakeup or SFML event, whichever comes first.
     {
+      PROFILE_SPAN("sleep");
       auto wake = next_wakeup();
       auto timeout = sf::Time::Zero; // Zero = block indefinitely
       if (wake) {
         now = std::chrono::steady_clock::now();
         auto remaining = *wake - now;
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-            remaining - kBusyWaitThreshold);
-        timeout = sf::microseconds(us.count());
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(remaining);
+        timeout = sf::microseconds(std::max(us.count(), int64_t{1}));
       }
 
       if (auto event = window_.waitEvent(timeout)) {

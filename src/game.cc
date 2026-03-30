@@ -92,7 +92,6 @@ void Game::process_event(const GameEvent &event) {
           handle_garbage(ev);
       },
       event);
-  dirty_ = true;
 }
 
 void Game::handle_input(const InputEvent &e) {
@@ -104,6 +103,7 @@ void Game::handle_input(const InputEvent &e) {
     if (board_.collides(current_piece_)) {
       current_piece_.x -= dx;
     } else {
+      dirty_ = true;
       last_move_was_rotation_ = false;
       post_move_timers();
     }
@@ -118,6 +118,7 @@ void Game::handle_input(const InputEvent &e) {
     auto result = try_rotate(board_, current_piece_,
                              rotation_func(current_piece_.rotation));
     if (result) {
+      dirty_ = true;
       current_piece_ = *result;
       last_move_was_rotation_ = true;
       post_move_timers();
@@ -126,6 +127,7 @@ void Game::handle_input(const InputEvent &e) {
   }
   case Input::SoftDrop: {
     if (drop1()) {
+      dirty_ = true;
       last_move_was_rotation_ = false;
       if (!is_grounded()) {
         cancel_timer(TimerKind::Gravity);
@@ -139,11 +141,13 @@ void Game::handle_input(const InputEvent &e) {
   case Input::HardDrop: {
     current_piece_ = compute_ghost();
     lock_piece();
+    dirty_ = true;
     break;
   }
   case Input::Hold: {
     if (!hold_available_)
       break;
+    dirty_ = true;
     hold_available_ = false;
     cancel_timer(TimerKind::Gravity);
     cancel_timer(TimerKind::LockDelay);
@@ -170,6 +174,7 @@ void Game::handle_timer(const TimerEvent &e) {
   switch (e.kind) {
   case TimerKind::Gravity: {
     if (drop1()) {
+      dirty_ = true;
       last_move_was_rotation_ = false;
       if (is_grounded()) {
         schedule_timer(TimerKind::LockDelay, settings_.lock_delay);
@@ -183,6 +188,7 @@ void Game::handle_timer(const TimerEvent &e) {
   }
   case TimerKind::LockDelay: {
     lock_piece();
+    dirty_ = true;
     break;
   }
   case TimerKind::GarbageDelay: {
@@ -190,6 +196,7 @@ void Game::handle_timer(const TimerEvent &e) {
       board_.add_garbage(g.lines, g.gap_col);
     }
     pending_garbage_.clear();
+    dirty_ = true;
     break;
   }
   case TimerKind::N:
@@ -245,7 +252,6 @@ Piece Game::compute_ghost() const {
 bool Game::drop1() {
   current_piece_.y -= 1;
   if (!board_.collides(current_piece_)) {
-    dirty_ = true;
     return true;
   }
   current_piece_.y += 1;
