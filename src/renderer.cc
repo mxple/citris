@@ -1,15 +1,60 @@
 #include "renderer.h"
+#include <iostream>
 
-Renderer::Renderer(sf::RenderWindow &window)
-    : window_(window), vertices_(sf::PrimitiveType::Triangles) {
-  board_x_ = kBoardPadX * kTileSize;
-  board_y_ = 1 * kTileSize;
+using L = RenderLayout;
+
+// Fallback pastel colors indexed by CellColor enum (0=Empty..8=Garbage).
+static constexpr sf::Color kFallbackColors[] = {
+    sf::Color::Transparent,    // Empty
+    sf::Color(135, 206, 250),  // I
+    sf::Color(255, 255, 0),    // O
+    sf::Color(186, 85, 211),   // T
+    sf::Color(50, 205, 50),    // S
+    sf::Color(255, 105, 180),  // Z
+    sf::Color(30, 144, 255),   // J
+    sf::Color(255, 165, 0),    // L
+    sf::Color(128, 128, 128),  // Garbage
+};
+
+// CellColor -> skin tile index.
+// Skin order: Z=0, L=1, O=2, S=3, I=4, J=5, T=6, ghost=7, garbage=8, ...
+int Renderer::cell_to_skin(CellColor cc) {
+  switch (cc) {
+  case CellColor::Z:       return 0;
+  case CellColor::L:       return 1;
+  case CellColor::O:       return 2;
+  case CellColor::S:       return 3;
+  case CellColor::I:       return 4;
+  case CellColor::J:       return 5;
+  case CellColor::T:       return 6;
+  case CellColor::Garbage:  return L::kSkinGarbage;
+  case CellColor::Empty:   return 0; // shouldn't be called
+  }
+  return 0;
+}
+
+int Renderer::piece_to_skin(PieceType type) {
+  return cell_to_skin(piece_to_cell_color(type));
+}
+
+Renderer::Renderer(sf::RenderWindow &window, const std::string &skin_path)
+    : window_(window), tex_verts_(sf::PrimitiveType::Triangles),
+      solid_verts_(sf::PrimitiveType::Triangles) {
+  board_x_ = L::kBoardPadX * L::kTileSize;
+  board_y_ = 1 * L::kTileSize;
+
+  if (!skin_path.empty()) {
+    skin_ok_ = skin_.loadFromFile(skin_path);
+    if (!skin_ok_)
+      std::cerr << "Failed to load skin: " << skin_path << "\n";
+    skin_.setSmooth(false);
+  }
 }
 
 void Renderer::handle_resize(unsigned int width, unsigned int height) {
   auto view = window_.getView();
-  float logicalW = kWindowW;
-  float logicalH = kWindowH;
+  float logicalW = L::kWindowW;
+  float logicalH = L::kWindowH;
   float windowW = static_cast<float>(width);
   float windowH = static_cast<float>(height);
   float scale = std::min(windowW / logicalW, windowH / logicalH);
@@ -25,172 +70,151 @@ void Renderer::handle_resize(unsigned int width, unsigned int height) {
 
 void Renderer::draw(const GameState &state) {
   window_.clear(sf::Color(20, 20, 20));
-  vertices_.clear();
+  tex_verts_.clear();
+  solid_verts_.clear();
 
   draw_board_border();
   draw_board(state.board);
   draw_ghost(state.ghost_piece);
-  draw_piece(state.current_piece, piece_color(state.current_piece.type));
+  draw_piece(state.current_piece);
   draw_hold(state.hold_piece, state.hold_available);
   draw_preview(state.preview);
 
   if (state.game_over)
     draw_game_over();
 
-  flush();
+  if (tex_verts_.getVertexCount() > 0) {
+    sf::RenderStates rs;
+    rs.texture = &skin_;
+    window_.draw(tex_verts_, rs);
+  }
+  if (solid_verts_.getVertexCount() > 0)
+    window_.draw(solid_verts_);
+
   window_.display();
 }
 
 void Renderer::draw_board_border() {
-  // Border as 4 thin quads (top, bottom, left, right).
-  float bw = Board::kWidth * kTileSize;
-  float bh = Board::kVisibleHeight * kTileSize;
+  float bw = Board::kWidth * L::kTileSize;
+  float bh = Board::kVisibleHeight * L::kTileSize;
   float x = board_x_;
   float y = board_y_;
   sf::Color c(80, 80, 80);
-  push_quad({x - 1, y - 1}, {bw + 2, 1}, c);  // top
-  push_quad({x - 1, y + bh}, {bw + 2, 1}, c); // bottom
-  push_quad({x - 1, y}, {1, bh}, c);          // left
-  push_quad({x + bw, y}, {1, bh}, c);         // right
+  push_solid({x - 1, y - 1}, {bw + 2, 1}, c);
+  push_solid({x - 1, y + bh}, {bw + 2, 1}, c);
+  push_solid({x - 1, y}, {1, bh}, c);
+  push_solid({x + bw, y}, {1, bh}, c);
 }
 
 void Renderer::draw_board(const Board &board) {
   for (int row = 0; row < Board::kVisibleHeight; ++row) {
     for (int col = 0; col < Board::kWidth; ++col) {
-      if (board.filled(col, row)) {
-        auto pos = grid_to_pixel(col, row);
-        push_quad(pos, {kTileSize, kTileSize},
-                  color_for_cell(board.cell_color(col, row)));
+      auto cc = board.cell_color(col, row);
+      if (cc != CellColor::Empty) {
+        push_tile(grid_to_pixel(col, row),
+                  {L::kTileSize, L::kTileSize}, cell_to_skin(cc));
       }
     }
   }
 }
 
-void Renderer::draw_piece(const Piece &piece, sf::Color color) {
+void Renderer::draw_piece(const Piece &piece) {
+  int tile = piece_to_skin(piece.type);
   for (auto &cell : piece.cells_absolute()) {
-    if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize, kTileSize},
-                color);
-    }
+    if (cell.y < Board::kVisibleHeight)
+      push_tile(grid_to_pixel(cell.x, cell.y),
+                {L::kTileSize, L::kTileSize}, tile);
   }
 }
 
 void Renderer::draw_ghost(const Piece &ghost) {
-  auto color = piece_color(ghost.type);
-  color.a = 60;
   for (auto &cell : ghost.cells_absolute()) {
-    if (cell.y < Board::kVisibleHeight) {
-      push_quad(grid_to_pixel(cell.x, cell.y), {kTileSize, kTileSize},
-                color);
-    }
+    if (cell.y < Board::kVisibleHeight)
+      push_tile(grid_to_pixel(cell.x, cell.y),
+                {L::kTileSize, L::kTileSize}, L::kSkinGhost);
   }
 }
 
 void Renderer::draw_hold(std::optional<PieceType> hold, bool available) {
   if (!hold)
     return;
-
-  auto color = piece_color(*hold);
-  if (!available)
-    color = sf::Color(80, 80, 80);
-
-  float px = kTileSize * 0.5f;
-  float py = board_y_ + kTileSize;
-  draw_mini_piece(*hold, px, py, color);
+  float px = L::kTileSize * 0.5f;
+  float py = board_y_ + L::kTileSize;
+  int tile = available ? piece_to_skin(*hold) : L::kSkinGreyedHold;
+  draw_mini_piece(*hold, px, py, tile);
 }
 
 void Renderer::draw_preview(const std::array<PieceType, 6> &preview) {
-  float px = board_x_ + Board::kWidth * kTileSize + kTileSize * 0.5f;
-  float py = board_y_ + kTileSize;
-
+  float px = board_x_ + Board::kWidth * L::kTileSize + L::kTileSize * 0.5f;
+  float py = board_y_ + L::kTileSize;
   for (int i = 0; i < 5; ++i) {
-    draw_mini_piece(preview[i], px, py, piece_color(preview[i]));
-    py += kTileSize * 3;
+    draw_mini_piece(preview[i], px, py, piece_to_skin(preview[i]));
+    py += L::kTileSize * 3;
   }
 }
 
 void Renderer::draw_game_over() {
-  push_quad({0, 0}, {kWindowW, kWindowH}, sf::Color(0, 0, 0, 150));
+  push_solid({0, 0}, {L::kWindowW, L::kWindowH}, sf::Color(0, 0, 0, 150));
 }
 
-void Renderer::draw_mini_piece(PieceType type, float px, float py,
-                               sf::Color color) {
+void Renderer::draw_mini_piece(PieceType type, float px, float py, int tile) {
   int ti = static_cast<int>(type);
   auto &cells = kPieceCells[ti][static_cast<int>(Rotation::North)];
-
-  float mini = kTileSize * 0.7f;
-  for (auto &c : cells) {
-    push_quad({px + c.x * mini, py + (2 - c.y) * mini}, {mini, mini},
-              color);
-  }
-}
-
-sf::Color Renderer::piece_color(PieceType type) const {
-  switch (type) {
-  case PieceType::I:
-    return sf::Color(135, 206, 250);
-  case PieceType::O:
-    return sf::Color(255, 255, 0);
-  case PieceType::T:
-    return sf::Color(186, 85, 211);
-  case PieceType::S:
-    return sf::Color(50, 205, 50);
-  case PieceType::Z:
-    return sf::Color(255, 105, 180);
-  case PieceType::J:
-    return sf::Color(30, 144, 255);
-  case PieceType::L:
-    return sf::Color(255, 165, 0);
-  }
-  return sf::Color::White;
-}
-
-sf::Color Renderer::color_for_cell(CellColor color) const {
-  switch (color) {
-  case CellColor::I:
-    return piece_color(PieceType::I);
-  case CellColor::O:
-    return piece_color(PieceType::O);
-  case CellColor::T:
-    return piece_color(PieceType::T);
-  case CellColor::S:
-    return piece_color(PieceType::S);
-  case CellColor::Z:
-    return piece_color(PieceType::Z);
-  case CellColor::J:
-    return piece_color(PieceType::J);
-  case CellColor::L:
-    return piece_color(PieceType::L);
-  case CellColor::Garbage:
-    return sf::Color(128, 128, 128);
-  case CellColor::Empty:
-    return sf::Color::Transparent;
-  }
-  return sf::Color::White;
+  float mini = L::kTileSize * 0.7f;
+  for (auto &c : cells)
+    push_tile({px + c.x * mini, py + (2 - c.y) * mini}, {mini, mini}, tile);
 }
 
 sf::Vector2f Renderer::grid_to_pixel(int col, int row) const {
-  float px = board_x_ + col * kTileSize;
-  float py = board_y_ + (Board::kVisibleHeight - 1 - row) * kTileSize;
+  float px = board_x_ + col * L::kTileSize;
+  float py = board_y_ + (Board::kVisibleHeight - 1 - row) * L::kTileSize;
   return {px, py};
 }
 
-void Renderer::push_quad(sf::Vector2f pos, sf::Vector2f size, sf::Color color) {
+void Renderer::push_tile(sf::Vector2f pos, sf::Vector2f size,
+                         int tile_idx, sf::Color tint) {
+  if (!skin_ok_) {
+    // Fallback: use CellColor-indexed pastels. Skin tile -> approximate CellColor.
+    // Skin: Z=0,L=1,O=2,S=3,I=4,J=5,T=6,ghost=7,garbage=8,...
+    static constexpr int kSkinToCellColor[] = {5,7,2,4,1,6,3, 0,8, 8,0,0};
+    int cc = kSkinToCellColor[tile_idx];
+    auto base = kFallbackColors[cc];
+    sf::Color c(base.r, base.g, base.b,
+                static_cast<uint8_t>(base.a * tint.a / 255));
+    push_solid(pos, size, c);
+    return;
+  }
+
+  // Skin tiles are 30x30 at 31px pitch (30 + 1px separator).
+  float tx0 = static_cast<float>(tile_idx * L::kSkinPitch);
+  float tx1 = tx0 + L::kSkinTile;
+  float ty0 = 0.f;
+  float ty1 = static_cast<float>(L::kSkinTile);
+
   sf::Vector2f tl = pos;
   sf::Vector2f tr = {pos.x + size.x, pos.y};
   sf::Vector2f bl = {pos.x, pos.y + size.y};
   sf::Vector2f br = {pos.x + size.x, pos.y + size.y};
 
-  vertices_.append(sf::Vertex{tl, color});
-  vertices_.append(sf::Vertex{tr, color});
-  vertices_.append(sf::Vertex{br, color});
-
-  vertices_.append(sf::Vertex{tl, color});
-  vertices_.append(sf::Vertex{br, color});
-  vertices_.append(sf::Vertex{bl, color});
+  tex_verts_.append(sf::Vertex{tl, tint, {tx0, ty0}});
+  tex_verts_.append(sf::Vertex{tr, tint, {tx1, ty0}});
+  tex_verts_.append(sf::Vertex{br, tint, {tx1, ty1}});
+  tex_verts_.append(sf::Vertex{tl, tint, {tx0, ty0}});
+  tex_verts_.append(sf::Vertex{br, tint, {tx1, ty1}});
+  tex_verts_.append(sf::Vertex{bl, tint, {tx0, ty1}});
 }
 
-void Renderer::flush() {
-  if (vertices_.getVertexCount() > 0)
-    window_.draw(vertices_);
+void Renderer::push_solid(sf::Vector2f pos, sf::Vector2f size,
+                          sf::Color color) {
+  sf::Vector2f tl = pos;
+  sf::Vector2f tr = {pos.x + size.x, pos.y};
+  sf::Vector2f bl = {pos.x, pos.y + size.y};
+  sf::Vector2f br = {pos.x + size.x, pos.y + size.y};
+
+  solid_verts_.append(sf::Vertex{tl, color});
+  solid_verts_.append(sf::Vertex{tr, color});
+  solid_verts_.append(sf::Vertex{br, color});
+  solid_verts_.append(sf::Vertex{tl, color});
+  solid_verts_.append(sf::Vertex{br, color});
+  solid_verts_.append(sf::Vertex{bl, color});
 }

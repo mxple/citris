@@ -10,11 +10,11 @@ static constexpr auto kBusyWaitThreshold = std::chrono::microseconds(500);
 GameManager::GameManager(GameMode mode, const Settings &settings)
     : mode_(mode), settings_(settings) {
   window_ = sf::RenderWindow(
-      sf::VideoMode({Renderer::kWindowW, Renderer::kWindowH}), "Tetris");
+      sf::VideoMode({RenderLayout::kWindowW, RenderLayout::kWindowH}), "Tetris");
   window_.setKeyRepeatEnabled(false);
   game_ = std::make_unique<Game>(settings_);
   player_ = std::make_unique<HumanPlayer>(settings_);
-  renderer_ = std::make_unique<Renderer>(window_);
+  renderer_ = std::make_unique<Renderer>(window_, settings_.skin_path);
 }
 
 void GameManager::reset() {
@@ -24,7 +24,7 @@ void GameManager::reset() {
 void GameManager::run() {
   while (window_.isOpen()) {
     auto now = std::chrono::steady_clock::now();
-    { PROFILE_SPAN("sim");
+    {
       handle_window_events();
       player_->tick(now);
       drain_player_inputs();
@@ -43,7 +43,6 @@ void GameManager::run() {
 
     // Sleep until next wakeup or SFML event, whichever comes first.
     {
-      PROFILE_SPAN("sleep");
       auto wake = next_wakeup();
       auto timeout = sf::Time::Zero; // Zero = block indefinitely
       if (wake) {

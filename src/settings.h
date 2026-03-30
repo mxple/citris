@@ -1,10 +1,14 @@
 #pragma once
 #include <SFML/Window/Keyboard.hpp>
 #include <chrono>
+#include <string>
 
 using Duration = std::chrono::steady_clock::duration;
 
 struct Settings {
+  // Rendering
+  std::string skin_path = "assets/skin.png";
+
   // Controls
   sf::Keyboard::Key move_left = sf::Keyboard::Key::J;
   sf::Keyboard::Key move_right = sf::Keyboard::Key::L;
