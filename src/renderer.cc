@@ -6,6 +6,23 @@ Renderer::Renderer(sf::RenderWindow &window)
   board_y_ = 1 * kTileSize;
 }
 
+void Renderer::handle_resize(unsigned int width, unsigned int height) {
+  auto view = window_.getView();
+  float logicalW = kWindowW;
+  float logicalH = kWindowH;
+  float windowW = static_cast<float>(width);
+  float windowH = static_cast<float>(height);
+  float scale = std::min(windowW / logicalW, windowH / logicalH);
+  float viewportW = (logicalW * scale) / windowW;
+  float viewportH = (logicalH * scale) / windowH;
+  float viewportX = (1.f - viewportW) / 2.f;
+  float viewportY = (1.f - viewportH) / 2.f;
+  view.setSize({logicalW, logicalH});
+  view.setCenter({logicalW / 2.f, logicalH / 2.f});
+  view.setViewport({{viewportX, viewportY}, {viewportW, viewportH}});
+  window_.setView(view);
+}
+
 void Renderer::draw(const GameState &state) {
   window_.clear(sf::Color(20, 20, 20));
   vertices_.clear();
@@ -43,7 +60,7 @@ void Renderer::draw_board(const Board &board) {
       if (board.filled(col, row)) {
         auto pos = grid_to_pixel(col, row);
         push_quad(pos, {kTileSize - 1, kTileSize - 1},
-                  piece_color(board.cell_color(col, row)));
+                  color_for_cell(board.cell_color(col, row)));
       }
     }
   }
@@ -124,6 +141,30 @@ sf::Color Renderer::piece_color(PieceType type) const {
     return sf::Color(30, 144, 255);
   case PieceType::L:
     return sf::Color(255, 165, 0);
+  }
+  return sf::Color::White;
+}
+
+sf::Color Renderer::color_for_cell(CellColor color) const {
+  switch (color) {
+  case CellColor::I:
+    return piece_color(PieceType::I);
+  case CellColor::O:
+    return piece_color(PieceType::O);
+  case CellColor::T:
+    return piece_color(PieceType::T);
+  case CellColor::S:
+    return piece_color(PieceType::S);
+  case CellColor::Z:
+    return piece_color(PieceType::Z);
+  case CellColor::J:
+    return piece_color(PieceType::J);
+  case CellColor::L:
+    return piece_color(PieceType::L);
+  case CellColor::Garbage:
+    return sf::Color(128, 128, 128);
+  case CellColor::Empty:
+    return sf::Color::Transparent;
   }
   return sf::Color::White;
 }

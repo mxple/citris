@@ -72,6 +72,11 @@ void GameManager::dispatch_event(const sf::Event &event) {
     window_.close();
     return;
   }
+  if (auto *resized = event.getIf<sf::Event::Resized>()) {
+    renderer_->handle_resize(resized->size.x, resized->size.y);
+    renderer_->draw(game_->state());
+    return;
+  }
   if (auto *kp = event.getIf<sf::Event::KeyPressed>()) {
     if (kp->code == sf::Keyboard::Key::Grave) {
       reset();

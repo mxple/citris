@@ -15,8 +15,10 @@ public:
   explicit Renderer(sf::RenderWindow &window);
 
   void draw(const GameState &state);
+  void handle_resize(unsigned int width, unsigned int height);
 
   sf::Color piece_color(PieceType type) const;
+  sf::Color color_for_cell(CellColor color) const;
 
 private:
   void draw_board_border();
