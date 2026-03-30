@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cassert>
 
-// Check if placing piece would collide with walls or filled cells.
 bool Board::collides(const Piece &piece) const {
   return std::ranges::any_of(piece.cells_absolute(), [this](Vec2 cell) {
     return filled(cell.x, cell.y);
@@ -10,20 +9,20 @@ bool Board::collides(const Piece &piece) const {
 }
 
 void Board::place(const Piece &piece) {
+  auto color = piece_to_cell_color(piece.type);
   for (auto [x, y] : piece.cells_absolute()) {
-    rows_[y] |= (1 << x);
-    colors_[y][x] = piece.type;
+    cells_[y][x] = color;
   }
 }
 
 int Board::clear_lines() {
   int count = 0;
-  for (int i = 0; i < rows_.size(); i++) {
-    if (rows_[i] == 0x3FF) {
-      std::move(rows_.begin() + i + 1, rows_.end(), rows_.begin() + i);
-      rows_.back() = 0;
+  for (int i = 0; i < kTotalHeight; i++) {
+    if (row_full(i)) {
+      std::move(cells_.begin() + i + 1, cells_.end(), cells_.begin() + i);
+      cells_.back().fill(CellColor::Empty);
       count++;
-      i--; // recheck index due to shifting
+      i--;
     }
   }
   return count;
@@ -33,27 +32,25 @@ void Board::add_garbage(uint count, uint gap_col) {
   assert(count < kTotalHeight);
   assert(gap_col < kWidth);
 
-  std::move_backward(rows_.begin(), rows_.end() - count, rows_.end());
+  std::move_backward(cells_.begin(), cells_.end() - count, cells_.end());
 
-  int16_t garbage_row = 0x3FF ^ (1 << gap_col);
-  for (int i = 0; i < count; i++) {
-    rows_[i] = garbage_row;
+  for (uint i = 0; i < count; i++) {
+    cells_[i].fill(CellColor::Garbage);
+    cells_[i][gap_col] = CellColor::Empty;
   }
 }
 
 SpinKind Board::detect_spin(const Piece &piece) const {
   if (piece.type == PieceType::T) {
-    // T-spin: 3-corner rule
-    bool a = filled(piece.x, piece.y + 2);     // top-left
-    bool b = filled(piece.x + 2, piece.y + 2); // top-right
-    bool c = filled(piece.x, piece.y);         // bottom-left
-    bool d = filled(piece.x + 2, piece.y);     // bottom-right
+    bool a = filled(piece.x, piece.y + 2);
+    bool b = filled(piece.x + 2, piece.y + 2);
+    bool c = filled(piece.x, piece.y);
+    bool d = filled(piece.x + 2, piece.y);
 
     int count = a + b + c + d;
     if (count < 3)
       return SpinKind::None;
 
-    // Front corners face the flat side of the T.
     bool front;
     switch (piece.rotation) {
     case Rotation::North:
@@ -72,7 +69,6 @@ SpinKind Board::detect_spin(const Piece &piece) const {
     return front ? SpinKind::TSpin : SpinKind::Mini;
   }
 
-  // Allspin: immobile rule (can't move in any cardinal direction)
   Piece test = piece;
   test.x -= 1;
   if (!collides(test))
@@ -92,5 +88,10 @@ SpinKind Board::detect_spin(const Piece &piece) const {
 
 bool Board::filled(int col, int row) const {
   return col < 0 || col >= kWidth || row < 0 || row >= kTotalHeight ||
-         rows_[row] & (1 << col);
+         cells_[row][col] != CellColor::Empty;
+}
+
+bool Board::row_full(int row) const {
+  return std::ranges::none_of(cells_[row],
+                              [](CellColor c) { return c == CellColor::Empty; });
 }

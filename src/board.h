@@ -7,6 +7,13 @@
 #include <optional>
 #include <sys/types.h>
 
+enum class CellColor : uint8_t { Empty, I, O, T, S, Z, J, L, Garbage };
+
+inline CellColor piece_to_cell_color(PieceType type) {
+  // CellColor values mirror PieceType offset by 1 (Empty = 0).
+  return static_cast<CellColor>(static_cast<int>(type) + 1);
+}
+
 class Board {
 public:
   static constexpr int kWidth = 10;
@@ -21,14 +28,11 @@ public:
   void add_garbage(uint count, uint gap_col);
   SpinKind detect_spin(const Piece &piece) const;
   bool filled(int col, int row) const;
-  uint16_t row(uint r) const { return rows_[r]; }
 
-  // Color of a placed cell (for rendering). Only valid if filled(col, row).
-  PieceType cell_color(int col, int row) const { return colors_[row][col]; }
+  CellColor cell_color(int col, int row) const { return cells_[row][col]; }
 
 private:
-  std::array<uint16_t, kTotalHeight> rows_{};
-  // Per-cell color (PieceType). Only meaningful where the corresponding bit is
-  // set.
-  std::array<std::array<PieceType, kWidth>, kTotalHeight> colors_{};
+  bool row_full(int row) const;
+
+  std::array<std::array<CellColor, kWidth>, kTotalHeight> cells_{};
 };
