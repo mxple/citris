@@ -34,6 +34,10 @@ struct Settings {
   bool infinite_hold = false;
   std::chrono::milliseconds hard_drop_delay{50};
 
+  // Ghost piece rendering
+  bool colored_ghost = true;
+  uint8_t ghost_opacity = 100; // 0-255, converted from 0-100 in INI
+
   // Load from INI file. Missing keys keep defaults. Returns false on file error.
   bool load(const std::string &path);
 };

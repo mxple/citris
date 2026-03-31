@@ -177,6 +177,14 @@ bool Settings::load(const std::string &path) {
     if (section == "rendering") {
       if (key == "skin")
         skin_path = val;
+      else if (key == "colored_ghost")
+        ok = parse_bool(val, colored_ghost);
+      else if (key == "ghost_opacity") {
+        int pct;
+        ok = parse_int(val, pct);
+        if (ok)
+          ghost_opacity = static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
+      }
       else
         ok = false;
     } else if (section == "controls") {

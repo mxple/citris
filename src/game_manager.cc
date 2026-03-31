@@ -14,7 +14,7 @@ GameManager::GameManager(GameMode mode, const Settings &settings)
   window_.setKeyRepeatEnabled(false);
   game_ = std::make_unique<Game>(settings_);
   player_ = std::make_unique<HumanPlayer>(settings_);
-  renderer_ = std::make_unique<Renderer>(window_, settings_.skin_path);
+  renderer_ = std::make_unique<Renderer>(window_, settings_);
 }
 
 void GameManager::reset() {

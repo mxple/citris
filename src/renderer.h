@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game_state.h"
+#include "settings.h"
 #include <SFML/Graphics.hpp>
 
 struct RenderLayout {
@@ -25,7 +26,7 @@ struct RenderLayout {
 
 class Renderer {
 public:
-  Renderer(sf::RenderWindow &window, const std::string &skin_path);
+  Renderer(sf::RenderWindow &window, const Settings &settings);
   void draw(const GameState &state);
   void handle_resize(unsigned int width, unsigned int height);
 
@@ -49,6 +50,7 @@ private:
   void push_solid(sf::Vector2f pos, sf::Vector2f size, sf::Color color);
 
   sf::RenderWindow &window_;
+  const Settings &settings_;
   sf::Texture skin_;
   bool skin_ok_ = false;
   sf::VertexArray tex_verts_;

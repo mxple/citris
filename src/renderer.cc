@@ -37,16 +37,17 @@ int Renderer::piece_to_skin(PieceType type) {
   return cell_to_skin(piece_to_cell_color(type));
 }
 
-Renderer::Renderer(sf::RenderWindow &window, const std::string &skin_path)
-    : window_(window), tex_verts_(sf::PrimitiveType::Triangles),
+Renderer::Renderer(sf::RenderWindow &window, const Settings &settings)
+    : window_(window), settings_(settings),
+      tex_verts_(sf::PrimitiveType::Triangles),
       solid_verts_(sf::PrimitiveType::Triangles) {
   board_x_ = L::kBoardPadX * L::kTileSize;
   board_y_ = 1 * L::kTileSize;
 
-  if (!skin_path.empty()) {
-    skin_ok_ = skin_.loadFromFile(skin_path);
+  if (!settings_.skin_path.empty()) {
+    skin_ok_ = skin_.loadFromFile(settings_.skin_path);
     if (!skin_ok_)
-      std::cerr << "Failed to load skin: " << skin_path << "\n";
+      std::cerr << "Failed to load skin: " << settings_.skin_path << "\n";
     skin_.setSmooth(false);
   }
 }
@@ -128,10 +129,12 @@ void Renderer::draw_piece(const Piece &piece) {
 }
 
 void Renderer::draw_ghost(const Piece &ghost) {
+  sf::Color tint(255, 255, 255, settings_.ghost_opacity);
+  int tile = settings_.colored_ghost ? piece_to_skin(ghost.type) : L::kSkinGhost;
   for (auto &cell : ghost.cells_absolute()) {
     if (cell.y < Board::kVisibleHeight)
       push_tile(grid_to_pixel(cell.x, cell.y),
-                {L::kTileSize, L::kTileSize}, L::kSkinGhost);
+                {L::kTileSize, L::kTileSize}, tile, tint);
   }
 }
 
