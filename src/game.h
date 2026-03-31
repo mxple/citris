@@ -40,6 +40,10 @@ private:
   bool is_grounded() const;
   void post_move_timers();
 
+  void arm_gravity();
+  void apply_20g();
+  void arm_lock_delay();
+
   void schedule_timer(TimerKind kind, Duration fire_time);
   void cancel_timer(TimerKind kind);
 
@@ -71,4 +75,5 @@ private:
   // Current tick time — set at the start of update(), used by all internal
   // methods.
   TimePoint now_{};
+  TimePoint hard_drop_blocked_until_{};
 };

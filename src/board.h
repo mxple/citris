@@ -4,7 +4,6 @@
 #include "piece.h"
 #include <array>
 #include <cstdint>
-#include <optional>
 #include <sys/types.h>
 
 enum class CellColor : uint8_t { Empty, I, O, T, S, Z, J, L, Garbage };

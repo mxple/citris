@@ -131,7 +131,7 @@ void Game::handle_input(const InputEvent &e) {
       last_move_was_rotation_ = false;
       if (!is_grounded()) {
         cancel_timer(TimerKind::Gravity);
-        schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+        arm_gravity();
       } else {
         post_move_timers();
       }
@@ -139,6 +139,8 @@ void Game::handle_input(const InputEvent &e) {
     break;
   }
   case Input::HardDrop: {
+    if (now_ < hard_drop_blocked_until_)
+      break;
     current_piece_ = compute_ghost();
     lock_piece();
     dirty_ = true;
@@ -148,7 +150,8 @@ void Game::handle_input(const InputEvent &e) {
     if (!hold_available_)
       break;
     dirty_ = true;
-    hold_available_ = false;
+    if (!settings_.infinite_hold)
+      hold_available_ = false;
     cancel_timer(TimerKind::Gravity);
     cancel_timer(TimerKind::LockDelay);
     if (hold_piece_.has_value()) {
@@ -160,7 +163,7 @@ void Game::handle_input(const InputEvent &e) {
         game_over_ = true;
         return;
       }
-      schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+      arm_gravity();
     } else {
       hold_piece_ = current_piece_.type;
       spawn_piece();
@@ -177,17 +180,18 @@ void Game::handle_timer(const TimerEvent &e) {
       dirty_ = true;
       last_move_was_rotation_ = false;
       if (is_grounded()) {
-        schedule_timer(TimerKind::LockDelay, settings_.lock_delay);
+        arm_lock_delay();
       } else {
-        schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+        arm_gravity();
       }
     } else {
-      schedule_timer(TimerKind::LockDelay, settings_.lock_delay);
+      arm_lock_delay();
     }
     break;
   }
   case TimerKind::LockDelay: {
     lock_piece();
+    hard_drop_blocked_until_ = now_ + settings_.hard_drop_delay;
     dirty_ = true;
     break;
   }
@@ -219,7 +223,7 @@ void Game::spawn_piece() {
     return;
   }
 
-  schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+  arm_gravity();
 }
 
 void Game::lock_piece() {
@@ -268,15 +272,39 @@ void Game::post_move_timers() {
   if (is_grounded()) {
     if (lock_resets_remaining_ > 0) {
       --lock_resets_remaining_;
-      schedule_timer(TimerKind::LockDelay, settings_.lock_delay);
+      arm_lock_delay();
+    } else {
+      lock_piece();
     }
     cancel_timer(TimerKind::Gravity);
   } else {
     cancel_timer(TimerKind::LockDelay);
     if (!timers_[static_cast<int>(TimerKind::Gravity)]) {
-      schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+      arm_gravity();
     }
   }
+}
+
+void Game::arm_gravity() {
+  if (settings_.gravity_interval < std::chrono::milliseconds{0})
+    return;
+  if (settings_.gravity_interval == std::chrono::milliseconds{0}) {
+    apply_20g();
+    return;
+  }
+  schedule_timer(TimerKind::Gravity, settings_.gravity_interval);
+}
+
+void Game::apply_20g() {
+  current_piece_ = compute_ghost();
+  dirty_ = true;
+  arm_lock_delay();
+}
+
+void Game::arm_lock_delay() {
+  if (settings_.lock_delay < std::chrono::milliseconds{0})
+    return;
+  schedule_timer(TimerKind::LockDelay, settings_.lock_delay);
 }
 
 void Game::schedule_timer(TimerKind kind, Duration fire_time) {

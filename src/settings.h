@@ -31,4 +31,9 @@ struct Settings {
   std::chrono::milliseconds lock_delay{5000};
   std::chrono::milliseconds garbage_delay{250};
   int max_lock_resets = 15;
+  bool infinite_hold = false;
+  std::chrono::milliseconds hard_drop_delay{50};
+
+  // Load from INI file. Missing keys keep defaults. Returns false on file error.
+  bool load(const std::string &path);
 };
