@@ -29,6 +29,7 @@ public:
   bool filled(int col, int row) const;
 
   CellColor cell_color(int col, int row) const { return cells_[row][col]; }
+  bool is_empty() const;
 
 private:
   bool row_full(int row) const;

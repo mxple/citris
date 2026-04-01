@@ -2,35 +2,35 @@
 
 #include "attack.h"
 #include "board.h"
+#include "event.h"
 #include "game_state.h"
-#include "input.h"
 #include "rng.h"
 #include "settings.h"
+#include "stats.h"
+#include "timer_manager.h"
 #include <optional>
 #include <vector>
 
 class Game {
 public:
-  Game(const Settings &settings, unsigned seed = std::random_device{}());
+  Game(const Settings &settings, Stats &stats, TimerManager &timers,
+       unsigned seed = std::random_device{}());
 
-  void post_event(GameEvent event);
-  void update(TimePoint now);
+  bool process(const Event &ev, TimePoint now);
 
   GameState state() const;
 
-  bool state_dirty() const { return dirty_; }
+  bool dirty() const { return dirty_; }
   void clear_dirty() { dirty_ = false; }
 
   int drain_attack();
 
-  std::optional<TimePoint> next_wakeup() const;
-
 private:
-  void process_event(const GameEvent &event);
-
-  void handle_input(const InputEvent &e);
-  void handle_timer(const TimerEvent &e);
-  void handle_garbage(const GarbageEvent &e);
+  void handle_move(const MoveInput &e);
+  void handle_gravity();
+  void handle_lock_delay_expired();
+  void handle_garbage_received(const GarbageReceived &e);
+  void handle_garbage_delay_expired();
 
   void spawn_piece();
   void lock_piece();
@@ -43,11 +43,12 @@ private:
   void arm_gravity();
   void apply_20g();
   void arm_lock_delay();
-
-  void schedule_timer(TimerKind kind, Duration fire_time);
-  void cancel_timer(TimerKind kind);
+  void apply_arr0();
+  void apply_sonic_drop();
 
   const Settings &settings_;
+  Stats &stats_;
+  TimerManager &timers_;
   Board board_;
   Piece current_piece_{PieceType::I};
   std::optional<PieceType> hold_piece_;
@@ -63,17 +64,13 @@ private:
   };
   std::vector<PendingGarbage> pending_garbage_;
 
-  std::vector<GameEvent> event_queue_;
-
-  std::array<std::optional<TimePoint>, static_cast<int>(TimerKind::N)>
-      timers_{};
-
+  int piece_gen_ = 0;
   int pending_attack_ = 0;
   bool game_over_ = false;
   bool dirty_ = true;
+  std::optional<Input> arr_direction_;
+  bool soft_drop_active_ = false;
 
-  // Current tick time — set at the start of update(), used by all internal
-  // methods.
   TimePoint now_{};
   TimePoint hard_drop_blocked_until_{};
 };

@@ -1,25 +1,36 @@
 #include "piece.h"
 #include <cstdio>
 
-const char* piece_name(PieceType t) {
+const char *piece_name(PieceType t) {
   switch (t) {
-    case PieceType::I: return "I";
-    case PieceType::O: return "O";
-    case PieceType::T: return "T";
-    case PieceType::S: return "S";
-    case PieceType::Z: return "Z";
-    case PieceType::J: return "J";
-    case PieceType::L: return "L";
+  case PieceType::I:
+    return "I";
+  case PieceType::O:
+    return "O";
+  case PieceType::T:
+    return "T";
+  case PieceType::S:
+    return "S";
+  case PieceType::Z:
+    return "Z";
+  case PieceType::J:
+    return "J";
+  case PieceType::L:
+    return "L";
   }
   return "?";
 }
 
-const char* rot_name(Rotation r) {
+const char *rot_name(Rotation r) {
   switch (r) {
-    case Rotation::North: return "N";
-    case Rotation::East:  return "E";
-    case Rotation::South: return "S";
-    case Rotation::West:  return "W";
+  case Rotation::North:
+    return "N";
+  case Rotation::East:
+    return "E";
+  case Rotation::South:
+    return "S";
+  case Rotation::West:
+    return "W";
   }
   return "?";
 }

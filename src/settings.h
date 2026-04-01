@@ -8,6 +8,7 @@ using Duration = std::chrono::steady_clock::duration;
 struct Settings {
   // Rendering
   std::string skin_path = "assets/skin.png";
+  std::string font_path = "assets/FreeMono.otf";
 
   // Controls
   sf::Keyboard::Key move_left = sf::Keyboard::Key::J;
@@ -38,6 +39,7 @@ struct Settings {
   bool colored_ghost = true;
   uint8_t ghost_opacity = 100; // 0-255, converted from 0-100 in INI
 
-  // Load from INI file. Missing keys keep defaults. Returns false on file error.
+  // Load from INI file. Missing keys keep defaults. Returns false on file
+  // error.
   bool load(const std::string &path);
 };

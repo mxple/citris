@@ -14,9 +14,7 @@ struct GameState {
   std::optional<PieceType> hold_piece;
   bool hold_available = true;
   std::array<PieceType, 6> preview;
-  // int lines_cleared = 0;
-  // int level = 1;
-  // int score = 0;
   AttackState attack_state;
   bool game_over = false;
+  int piece_gen = 0; // incremented on spawn/hold
 };

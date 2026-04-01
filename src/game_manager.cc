@@ -1,122 +1,136 @@
 #include "game_manager.h"
 #include "human_player.h"
-#include "profiler.h"
-#include <SFML/Window/Keyboard.hpp>
 #include <chrono>
-#include <iostream>
 
-static constexpr auto kBusyWaitThreshold = std::chrono::microseconds(500);
+static constexpr auto kStatsInterval = std::chrono::milliseconds(16);
 
 GameManager::GameManager(GameMode mode, const Settings &settings)
     : mode_(mode), settings_(settings) {
   window_ = sf::RenderWindow(
-      sf::VideoMode({RenderLayout::kWindowW, RenderLayout::kWindowH}), "Tetris");
+      sf::VideoMode({RenderLayout::kWindowW, RenderLayout::kWindowH}),
+      "Tetris");
   window_.setKeyRepeatEnabled(false);
-  game_ = std::make_unique<Game>(settings_);
-  player_ = std::make_unique<HumanPlayer>(settings_);
-  renderer_ = std::make_unique<Renderer>(window_, settings_);
+  game_ = std::make_unique<Game>(settings_, stats_, timers_);
+  player_ = std::make_unique<HumanPlayer>(settings_, stats_, timers_);
+  renderer_ = std::make_unique<Renderer>(window_, settings_, stats_);
+
+  auto now = std::chrono::steady_clock::now();
+  timers_.schedule(TimerKind::StatsRefresh, now + kStatsInterval,
+                   StatsRefresh{});
 }
 
 void GameManager::reset() {
-  game_ = std::make_unique<Game>(settings_);
+  stats_.reset();
+  timers_.clear();
+  game_ = std::make_unique<Game>(settings_, stats_, timers_);
+  player_ = std::make_unique<HumanPlayer>(settings_, stats_, timers_);
+
+  auto now = std::chrono::steady_clock::now();
+  timers_.schedule(TimerKind::StatsRefresh, now + kStatsInterval,
+                   StatsRefresh{});
 }
 
 void GameManager::run() {
+  auto wrap_sfml = [this](const sf::Event &sfml_ev) {
+    if (sfml_ev.is<sf::Event::Closed>())
+      pending_.push_back(WindowClosed{});
+    else if (auto *r = sfml_ev.getIf<sf::Event::Resized>())
+      pending_.push_back(WindowResized{r->size.x, r->size.y});
+    else if (auto *kp = sfml_ev.getIf<sf::Event::KeyPressed>())
+      pending_.push_back(KeyPressed{kp->code});
+    else if (auto *kr = sfml_ev.getIf<sf::Event::KeyReleased>())
+      pending_.push_back(KeyReleased{kr->code});
+  };
+
   while (window_.isOpen()) {
     auto now = std::chrono::steady_clock::now();
-    {
-      handle_window_events();
-      player_->tick(now);
-      drain_player_inputs();
-      game_->update(now);
 
-      if (mode_ != GameMode::Solo)
-        route_garbage();
+    // 1. Poll SFML events
+    while (auto sfml_ev = window_.pollEvent())
+      wrap_sfml(*sfml_ev);
+
+    // 2. Collect expired timers
+    timers_.collect_expired(now, pending_);
+
+    // 3. Dispatch loop (handlers may add to pending_)
+    for (int i = 0; i < pending_.size(); ++i) {
+      Event ev = pending_[i];
+      if (player_->process(ev, now, pending_))
+        continue;
+      if (game_->process(ev, now))
+        continue;
+      if (this->process(ev))
+        continue;
     }
+    pending_.clear();
 
-    // TODO skip if < 1 frame passed (wait vsync)
-    if (game_->state_dirty()) {
-      PROFILE_SPAN("draw");
-      renderer_->draw(game_->state());
+    // 4. Route garbage (multiplayer)
+    if (mode_ != GameMode::Solo)
+      route_garbage(now);
+
+    // 5. Render if dirty
+    bool board_changed = game_->dirty();
+    if (board_changed)
       game_->clear_dirty();
+
+    if (board_changed) {
+      renderer_->draw(game_->state());
+    } else if (stats_dirty_) {
+      renderer_->draw_stats();
     }
+    stats_dirty_ = false;
 
-    // Sleep until next wakeup or SFML event, whichever comes first.
-    {
-      auto wake = next_wakeup();
-      auto timeout = sf::Time::Zero; // Zero = block indefinitely
-      if (wake) {
-        now = std::chrono::steady_clock::now();
-        auto remaining = *wake - now;
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(remaining);
-        timeout = sf::microseconds(std::max(us.count(), int64_t{1}));
-      }
-
-      if (auto event = window_.waitEvent(timeout)) {
-        dispatch_event(*event);
-      } 
+    // 6. Sleep until next timer or SFML event
+    if (auto wake = timers_.next_deadline()) {
+      now = std::chrono::steady_clock::now();
+      auto remaining = *wake - now;
+      auto us =
+          std::chrono::duration_cast<std::chrono::microseconds>(remaining);
+      auto timeout = sf::microseconds(std::max(us.count(), int64_t{1}));
+      if (auto ev = window_.waitEvent(timeout))
+        wrap_sfml(*ev);
+    } else {
+      if (auto ev = window_.waitEvent())
+        wrap_sfml(*ev);
     }
   }
 }
 
-void GameManager::handle_window_events() {
-  while (auto event = window_.pollEvent()) {
-    dispatch_event(*event);
-  }
-}
-
-void GameManager::dispatch_event(const sf::Event &event) {
-  if (event.is<sf::Event::Closed>()) {
+bool GameManager::process(const Event &ev) {
+  if (std::holds_alternative<WindowClosed>(ev)) {
     window_.close();
-    return;
+    return true;
   }
-  if (auto *resized = event.getIf<sf::Event::Resized>()) {
-    renderer_->handle_resize(resized->size.x, resized->size.y);
+  if (auto *r = std::get_if<WindowResized>(&ev)) {
+    renderer_->handle_resize(r->w, r->h);
     renderer_->draw(game_->state());
-    return;
+    return true;
   }
-  if (auto *kp = event.getIf<sf::Event::KeyPressed>()) {
-    if (kp->code == sf::Keyboard::Key::Grave) {
+  if (std::holds_alternative<StatsRefresh>(ev)) {
+    stats_dirty_ = true;
+    auto now = std::chrono::steady_clock::now();
+    timers_.schedule(TimerKind::StatsRefresh, now + kStatsInterval,
+                     StatsRefresh{});
+    return true;
+  }
+  if (auto *kp = std::get_if<KeyPressed>(&ev)) {
+    if (kp->key == sf::Keyboard::Key::Grave) {
       reset();
-      return;
+      return true;
     }
-    player_->on_key_pressed(kp->code);
   }
-  if (auto *kr = event.getIf<sf::Event::KeyReleased>()) {
-    player_->on_key_released(kr->code);
-  }
+  return false;
 }
 
-void GameManager::drain_player_inputs() {
-  auto state = game_->state();
-  while (auto input = player_->poll(state)) {
-    game_->post_event(InputEvent{*input});
-  }
-}
-
-void GameManager::route_garbage() {
+void GameManager::route_garbage(TimePoint now) {
   if (!game2_)
     return;
 
   int attack1 = game_->drain_attack();
-  if (attack1 > 0) {
-    // TODO: random gap column
-    game2_->post_event(GarbageEvent{attack1, 0});
-  }
+  if (attack1 > 0)
+    game2_->process(GarbageReceived{attack1, 0}, now);
 
   int attack2 = game2_->drain_attack();
-  if (attack2 > 0) {
-    game_->post_event(GarbageEvent{attack2, 0});
-  }
-}
-
-std::optional<TimePoint> GameManager::next_wakeup() const {
-  auto game_wake = game_->next_wakeup();
-  auto player_wake = player_->next_wakeup();
-
-  if (!game_wake)
-    return player_wake;
-  if (!player_wake)
-    return game_wake;
-  return std::min(*game_wake, *player_wake);
+  if (attack2 > 0)
+    game_->process(GarbageReceived{attack2, 0}, now);
 }

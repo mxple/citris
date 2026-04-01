@@ -1,9 +1,9 @@
 #include "human_player.h"
 #include "board.h"
-#include <iostream>
-#include <ostream>
 
-HumanPlayer::HumanPlayer(const Settings &settings) : settings_(settings) {
+HumanPlayer::HumanPlayer(const Settings &settings, Stats &stats,
+                         TimerManager &timers)
+    : settings_(settings), stats_(stats), timers_(timers) {
   key_map_[settings.move_left] = Input::Left;
   key_map_[settings.move_right] = Input::Right;
   key_map_[settings.rotate_cw] = Input::RotateCW;
@@ -14,181 +14,191 @@ HumanPlayer::HumanPlayer(const Settings &settings) : settings_(settings) {
   key_map_[settings.hold] = Input::Hold;
 }
 
-std::optional<Input> HumanPlayer::poll(const GameState &state) {
-  if (buffer_.empty())
-    return std::nullopt;
-  auto input = buffer_.front();
-  buffer_.pop_front();
-  return input;
+bool HumanPlayer::process(const Event &ev, TimePoint now,
+                          std::vector<Event> &pending) {
+  return std::visit(
+      [&](auto &&e) -> bool {
+        using T = std::decay_t<decltype(e)>;
+        if constexpr (std::is_same_v<T, KeyPressed>) {
+          return handle_key_pressed(e, now, pending);
+        } else if constexpr (std::is_same_v<T, KeyReleased>) {
+          return handle_key_released(e, now, pending);
+        } else if constexpr (std::is_same_v<T, DASCharged>) {
+          handle_das_charged(e, now, pending);
+          return true;
+        } else if constexpr (std::is_same_v<T, ARRTick>) {
+          handle_arr_tick(e, now, pending);
+          return true;
+        } else if constexpr (std::is_same_v<T, SoftDropTick>) {
+          handle_soft_drop_tick(now, pending);
+          return true;
+        } else {
+          return false;
+        }
+      },
+      ev);
 }
 
-void HumanPlayer::on_key_pressed(sf::Keyboard::Key key) {
-  auto input = key_to_input(key);
+bool HumanPlayer::handle_key_pressed(const KeyPressed &e, TimePoint now,
+                                     std::vector<Event> &pending) {
+  auto input = key_to_input(e.key);
   if (!input)
-    return;
+    return false;
 
-  auto now = std::chrono::steady_clock::now();
+  stats_.add_input();
 
   switch (*input) {
-  case Input::Left: {
-    if (!das_left_.held) {
-      das_left_.held = true;
-      das_left_.das_charged = false;
-      das_left_.press_time = now;
-      buffer_.push_back(Input::Left);
-    }
-    // Last-pressed wins: Left takes over from Right.
-    active_direction_ = Input::Left;
-    break;
-  }
+  case Input::Left:
   case Input::Right: {
-    if (!das_right_.held) {
-      das_right_.held = true;
-      das_right_.das_charged = false;
-      das_right_.press_time = now;
-      buffer_.push_back(Input::Right);
+    int idx = dir_index(*input);
+    if (!held_[idx]) {
+      held_[idx] = true;
+      pending.push_back(MoveInput{*input});
+      if (arr0_direction_ && active_direction_ != *input)
+        cancel_arr0(pending);
+      das_charged_[idx] = false;
+      timers_.schedule(das_timer(*input), now + settings_.das,
+                       DASCharged{*input});
     }
-    active_direction_ = Input::Right;
+    active_direction_ = *input;
     break;
   }
   case Input::SoftDrop: {
     if (!soft_drop_held_) {
       soft_drop_held_ = true;
-      last_soft_drop_ = now;
-      buffer_.push_back(Input::SoftDrop);
+      pending.push_back(MoveInput{Input::SoftDrop});
+      if (settings_.soft_drop_interval == std::chrono::milliseconds{0}) {
+        for (int i = 0; i < Board::kTotalHeight; ++i)
+          pending.push_back(MoveInput{Input::SoftDrop});
+        pending.push_back(SoftDropActive{});
+        sonic_drop_active_ = true;
+      } else {
+        timers_.schedule(TimerKind::SoftDrop,
+                         now + settings_.soft_drop_interval, SoftDropTick{});
+      }
     }
     break;
   }
   default:
-    // Instant actions: rotate, hard drop, hold.
-    buffer_.push_back(*input);
+    pending.push_back(MoveInput{*input});
     break;
   }
+  return true;
 }
 
-void HumanPlayer::on_key_released(sf::Keyboard::Key key) {
-  auto input = key_to_input(key);
+bool HumanPlayer::handle_key_released(const KeyReleased &e, TimePoint now,
+                                      std::vector<Event> &pending) {
+  auto input = key_to_input(e.key);
   if (!input)
-    return;
+    return false;
 
   switch (*input) {
   case Input::Left:
-    das_left_.held = false;
-    if (!settings_.das_preserve_charge)
-      das_left_.das_charged = false;
-    // If Left was active and Right is still held, Right resumes.
-    if (active_direction_ == Input::Left) {
-      active_direction_ =
-          das_right_.held ? std::optional(Input::Right) : std::nullopt;
+  case Input::Right: {
+    int idx = dir_index(*input);
+    held_[idx] = false;
+    timers_.cancel(das_timer(*input));
+    timers_.cancel(arr_timer(*input));
+    das_charged_[idx] = false;
+    cancel_arr0(pending);
+
+    if (active_direction_ == *input) {
+      Input other = opposite(*input);
+      int other_idx = dir_index(other);
+      if (held_[other_idx]) {
+        active_direction_ = other;
+        if (settings_.das_preserve_charge && das_charged_[other_idx]) {
+          start_arr_or_burst(other, now, pending);
+        } else if (!timers_.active(das_timer(other))) {
+          das_charged_[other_idx] = false;
+          timers_.schedule(das_timer(other), now + settings_.das,
+                           DASCharged{other});
+        }
+        // else: DAS timer for other direction still running, will fire
+        // naturally
+      } else {
+        active_direction_ = std::nullopt;
+      }
     }
     break;
-  case Input::Right:
-    das_right_.held = false;
-    if (!settings_.das_preserve_charge)
-      das_right_.das_charged = false;
-    if (active_direction_ == Input::Right) {
-      active_direction_ =
-          das_left_.held ? std::optional(Input::Left) : std::nullopt;
-    }
-    break;
+  }
   case Input::SoftDrop:
     soft_drop_held_ = false;
+    timers_.cancel(TimerKind::SoftDrop);
+    cancel_sonic_drop(pending);
     break;
   default:
     break;
   }
+  return true;
 }
 
-void HumanPlayer::tick(TimePoint now) {
-  // Only process DAS/ARR for the active direction (last-pressed wins).
-  // std::cout << static_cast<int>(active_direction_.value_or(Input::Left)) <<
-  // std::endl;
-  if (active_direction_ == Input::Left)
-    update_das(das_left_, Input::Left, now);
-  else if (active_direction_ == Input::Right)
-    update_das(das_right_, Input::Right, now);
-
-  update_soft_drop(now);
-}
-
-void HumanPlayer::update_das(DASState &das, Input input, TimePoint now) {
-  if (!das.held)
+void HumanPlayer::handle_das_charged(const DASCharged &e, TimePoint now,
+                                     std::vector<Event> &pending) {
+  int idx = dir_index(e.direction);
+  // Guard against stale timer events — key may have been released after
+  // collect_expired moved this event into pending but before dispatch.
+  if (!held_[idx])
     return;
 
-  if (!das.das_charged) {
-    if (now >= das.press_time + settings_.das) {
-      das.das_charged = true;
-      das.last_repeat = das.press_time + settings_.das;
-      buffer_.push_back(input);
-    }
-    return;
-  }
+  das_charged_[idx] = true;
 
-  // DAS is charged — emit ARR repeats.
-  if (settings_.arr == std::chrono::milliseconds{0}) {
-    // ARR=0: emit enough to cross the board every tick.
-    // Collision handling in Game stops the piece at the wall.
-    for (int i = 0; i < Board::kWidth; ++i)
-      buffer_.push_back(input);
-  } else {
-    while (now >= das.last_repeat + settings_.arr) {
-      das.last_repeat += settings_.arr;
-      buffer_.push_back(input);
-    }
-  }
+  if (active_direction_ != e.direction)
+    return;
+
+  start_arr_or_burst(e.direction, now, pending);
 }
 
-void HumanPlayer::update_soft_drop(TimePoint now) {
+void HumanPlayer::handle_arr_tick(const ARRTick &e, TimePoint now,
+                                  std::vector<Event> &pending) {
+  if (active_direction_ != e.direction)
+    return;
+
+  pending.push_back(MoveInput{e.direction});
+  timers_.schedule(arr_timer(e.direction), now + settings_.arr,
+                   ARRTick{e.direction});
+}
+
+void HumanPlayer::handle_soft_drop_tick(TimePoint now,
+                                        std::vector<Event> &pending) {
   if (!soft_drop_held_)
     return;
 
-  if (settings_.soft_drop_interval == std::chrono::milliseconds{0}) {
-    // Sonic: emit enough to drop through the full board every tick.
-    for (int i = 0; i < Board::kTotalHeight; ++i)
-      buffer_.push_back(Input::SoftDrop);
+  pending.push_back(MoveInput{Input::SoftDrop});
+  if (settings_.soft_drop_interval > std::chrono::milliseconds{0}) {
+    timers_.schedule(TimerKind::SoftDrop, now + settings_.soft_drop_interval,
+                     SoftDropTick{});
   } else {
-    while (now >= last_soft_drop_ + settings_.soft_drop_interval) {
-      last_soft_drop_ += settings_.soft_drop_interval;
-      buffer_.push_back(Input::SoftDrop);
-    }
+    for (int i = 0; i < Board::kTotalHeight; ++i)
+      pending.push_back(MoveInput{Input::SoftDrop});
   }
 }
 
-std::optional<TimePoint> HumanPlayer::next_wakeup() const {
-  std::optional<TimePoint> earliest;
-
-  auto consider = [&](TimePoint t) {
-    if (!earliest || t < *earliest)
-      earliest = t;
-  };
-
-  auto consider_das = [&](const DASState &das) {
-    if (!das.held)
-      return;
-    if (!das.das_charged) {
-      consider(das.press_time + settings_.das);
-    } else if (settings_.arr > std::chrono::milliseconds{0}) {
-      consider(das.last_repeat + settings_.arr);
-    } else {
-      // ARR=0: need immediate wakeup every tick while held.
-      consider(das.last_repeat); // already in the past → wakes immediately
-    }
-  };
-
-  if (active_direction_ == Input::Left)
-    consider_das(das_left_);
-  if (active_direction_ == Input::Right)
-    consider_das(das_right_);
-
-  if (soft_drop_held_) {
-    if (settings_.soft_drop_interval > std::chrono::milliseconds{0}) {
-      consider(last_soft_drop_ + settings_.soft_drop_interval);
-    } else {
-      consider(last_soft_drop_); // immediate wakeup
-    }
+void HumanPlayer::start_arr_or_burst(Input dir, TimePoint now,
+                                     std::vector<Event> &pending) {
+  if (settings_.arr == std::chrono::milliseconds{0}) {
+    for (int i = 0; i < Board::kWidth; ++i)
+      pending.push_back(MoveInput{dir});
+    pending.push_back(ARRActive{dir});
+    arr0_direction_ = dir;
+  } else {
+    pending.push_back(MoveInput{dir});
+    timers_.schedule(arr_timer(dir), now + settings_.arr, ARRTick{dir});
   }
+}
 
-  return earliest;
+void HumanPlayer::cancel_arr0(std::vector<Event> &pending) {
+  if (arr0_direction_) {
+    pending.push_back(ARRInactive{});
+    arr0_direction_.reset();
+  }
+}
+
+void HumanPlayer::cancel_sonic_drop(std::vector<Event> &pending) {
+  if (sonic_drop_active_) {
+    pending.push_back(SoftDropInactive{});
+    sonic_drop_active_ = false;
+  }
 }
 
 std::optional<Input> HumanPlayer::key_to_input(sf::Keyboard::Key key) const {

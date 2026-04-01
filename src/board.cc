@@ -1,6 +1,7 @@
 #include "board.h"
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 
 bool Board::collides(const Piece &piece) const {
   return std::ranges::any_of(piece.cells_absolute(), [this](Vec2 cell) {
@@ -91,7 +92,15 @@ bool Board::filled(int col, int row) const {
          cells_[row][col] != CellColor::Empty;
 }
 
+bool Board::is_empty() const {
+  for (int row = 0; row < kTotalHeight; ++row)
+    for (int col = 0; col < kWidth; ++col)
+      if (cells_[row][col] != CellColor::Empty)
+        return false;
+  return true;
+}
+
 bool Board::row_full(int row) const {
-  return std::ranges::none_of(cells_[row],
-                              [](CellColor c) { return c == CellColor::Empty; });
+  return std::ranges::none_of(
+      cells_[row], [](CellColor c) { return c == CellColor::Empty; });
 }
