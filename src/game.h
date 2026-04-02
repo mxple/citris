@@ -43,8 +43,9 @@ private:
   void arm_gravity();
   void apply_20g();
   void arm_lock_delay();
-  void apply_arr0();
-  void apply_sonic_drop();
+  bool apply_arr0();
+  bool apply_sonic_drop();
+  void settle();
 
   const Settings &settings_;
   Stats &stats_;
@@ -64,6 +65,7 @@ private:
   };
   std::vector<PendingGarbage> pending_garbage_;
 
+  LastClear last_clear_;
   int piece_gen_ = 0;
   int pending_attack_ = 0;
   bool game_over_ = false;

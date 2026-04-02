@@ -57,6 +57,7 @@ GameState Game::state() const {
       .attack_state = attack_state_,
       .game_over = game_over_,
       .piece_gen = piece_gen_,
+      .last_clear = last_clear_,
   };
 }
 
@@ -94,8 +95,7 @@ void Game::handle_move(const MoveInput &e) {
       dirty_ = true;
       current_piece_ = *result;
       last_move_was_rotation_ = true;
-      apply_sonic_drop();
-      apply_arr0();
+      settle();
       post_move_timers();
     }
     break;
@@ -104,7 +104,7 @@ void Game::handle_move(const MoveInput &e) {
     if (drop1()) {
       dirty_ = true;
       last_move_was_rotation_ = false;
-      apply_arr0();
+      settle();
       if (!is_grounded()) {
         timers_.cancel(TimerKind::Gravity);
         arm_gravity();
@@ -140,8 +140,7 @@ void Game::handle_move(const MoveInput &e) {
         game_over_ = true;
         return;
       }
-      apply_sonic_drop();
-      apply_arr0();
+      settle();
       arm_gravity();
     } else {
       hold_piece_ = current_piece_.type;
@@ -156,8 +155,7 @@ void Game::handle_gravity() {
   if (drop1()) {
     dirty_ = true;
     last_move_was_rotation_ = false;
-    apply_sonic_drop();
-    apply_arr0();
+    settle();
     if (is_grounded()) {
       arm_lock_delay();
     } else {
@@ -199,8 +197,7 @@ void Game::spawn_piece() {
     return;
   }
 
-  apply_sonic_drop();
-  apply_arr0();
+  settle();
   arm_gravity();
 }
 
@@ -217,12 +214,17 @@ void Game::lock_piece() {
   int attack = compute_attack_and_update_state(attack_state_, cleared, spin);
   pending_attack_ += attack;
 
+  bool pc = cleared > 0 && board_.is_empty();
+  if (cleared > 0 || spin != SpinKind::None) {
+    last_clear_ = {cleared, spin, pc, piece_gen_};
+  }
+
   stats_.add_piece();
   stats_.add_lines(cleared);
   stats_.add_attack(attack);
   stats_.set_combo(attack_state_.combo);
   stats_.set_b2b(attack_state_.b2b);
-  if (cleared > 0 && board_.is_empty())
+  if (pc)
     stats_.add_perfect_clear();
 
   hold_available_ = true;
@@ -293,9 +295,9 @@ void Game::arm_lock_delay() {
                    LockDelayExpired{});
 }
 
-void Game::apply_sonic_drop() {
+bool Game::apply_sonic_drop() {
   if (!soft_drop_active_)
-    return;
+    return false;
   bool moved = false;
   while (true) {
     current_piece_.y -= 1;
@@ -305,13 +307,20 @@ void Game::apply_sonic_drop() {
     }
     moved = true;
   }
-  if (moved)
+  if (moved) {
     dirty_ = true;
+    return true;
+  }
+  return false;
 }
 
-void Game::apply_arr0() {
+void Game::settle() {
+  while (apply_sonic_drop() | apply_arr0()) {}
+}
+
+bool Game::apply_arr0() {
   if (!arr_direction_)
-    return;
+    return false;
   int dx = (*arr_direction_ == Input::Left) ? -1 : 1;
   bool moved = false;
   while (true) {
@@ -322,6 +331,9 @@ void Game::apply_arr0() {
     }
     moved = true;
   }
-  if (moved)
+  if (moved) {
     dirty_ = true;
+    return true;
+  }
+  return false;
 }

@@ -91,6 +91,14 @@ void Renderer::handle_resize(unsigned int width, unsigned int height) {
 }
 
 void Renderer::draw(const GameState &state) {
+  if (state.last_clear.piece_gen != last_drawn_piece_gen_ &&
+      (state.last_clear.lines > 0 ||
+       state.last_clear.spin != SpinKind::None)) {
+    last_drawn_piece_gen_ = state.last_clear.piece_gen;
+    displayed_clear_ = state.last_clear;
+  }
+  last_state_ = state;
+
   render_board_scene(state);
   blit_and_present();
 }
@@ -101,7 +109,9 @@ void Renderer::blit_and_present() {
   window_.clear(sf::Color(20, 20, 20));
   sf::Sprite board_sprite(board_tex_.getTexture());
   window_.draw(board_sprite);
-  draw_stats_text(std::chrono::steady_clock::now());
+  auto now = std::chrono::steady_clock::now();
+  draw_stats_text(now);
+  draw_action_text(last_state_);
   window_.display();
 }
 
@@ -111,6 +121,7 @@ void Renderer::render_board_scene(const GameState &state) {
   solid_verts_.clear();
 
   draw_board_border();
+  draw_gridlines();
   draw_board(state.board);
   draw_ghost(state.ghost_piece);
   draw_piece(state.current_piece);
@@ -194,6 +205,27 @@ void Renderer::draw_board_border() {
   push_solid({x + bw, y}, {1, bh}, c);
 }
 
+void Renderer::draw_gridlines() {
+  if (settings_.grid_opacity == 0)
+    return;
+  sf::Color c(255, 255, 255, settings_.grid_opacity);
+  float bx = board_x_;
+  float by = board_y_;
+  float bw = Board::kWidth * L::kTileSize;
+  float bh = Board::kVisibleHeight * L::kTileSize;
+
+  // 9 vertical lines
+  for (int col = 1; col < Board::kWidth; ++col) {
+    float x = bx + col * L::kTileSize;
+    push_solid({x, by}, {1, bh}, c);
+  }
+  // 19 horizontal lines
+  for (int row = 1; row < Board::kVisibleHeight; ++row) {
+    float y = by + row * L::kTileSize;
+    push_solid({bx, y}, {bw, 1}, c);
+  }
+}
+
 void Renderer::draw_board(const Board &board) {
   for (int row = 0; row < Board::kVisibleHeight; ++row) {
     for (int col = 0; col < Board::kWidth; ++col) {
@@ -246,6 +278,48 @@ void Renderer::draw_preview(const std::array<PieceType, 6> &preview) {
 
 void Renderer::draw_game_over() {
   push_solid({0, 0}, {L::kWindowW, L::kWindowH}, sf::Color(0, 0, 0, 150));
+}
+
+void Renderer::draw_action_text(const GameState &state) {
+  if (!font_ok_ || displayed_clear_.lines == 0)
+    return;
+
+  // Build label
+  std::string label;
+  switch (displayed_clear_.spin) {
+  case SpinKind::TSpin:
+    label = "tspin ";
+    break;
+  case SpinKind::Mini:
+    label = "tspin mini ";
+    break;
+  case SpinKind::AllSpin:
+    label = "allspin ";
+    break;
+  case SpinKind::None:
+    break;
+  }
+
+  static constexpr const char *kLineNames[] = {"", "single", "double",
+                                                "triple", "quad"};
+  int idx = std::clamp(displayed_clear_.lines, 0, 4);
+  label += kLineNames[idx];
+
+  constexpr unsigned int kFontSize = 20;
+  float x = 10.f;
+  float y = board_y_ + L::kTileSize * 5.f + 22.f * 9.f;
+
+  sf::Text text(font_, label, kFontSize);
+  text.setFillColor(sf::Color(255, 255, 100));
+  text.setPosition({x, y});
+  window_.draw(text);
+
+  if (displayed_clear_.perfect_clear) {
+    sf::Text pc_text(font_, "perfect clear", kFontSize);
+    pc_text.setFillColor(sf::Color(255, 200, 50));
+    pc_text.setPosition({x, y + 22.f});
+    window_.draw(pc_text);
+  }
 }
 
 void Renderer::draw_mini_piece(PieceType type, float px, float py, int tile) {

@@ -1,9 +1,17 @@
 #pragma once
 
+#include "attack.h"
 #include "board.h"
 #include "piece.h"
 #include <array>
 #include <optional>
+
+struct LastClear {
+  int lines = 0;
+  SpinKind spin = SpinKind::None;
+  bool perfect_clear = false;
+  int piece_gen = 0;
+};
 
 // Read-only snapshot of game state for rendering / AI.
 // Cheap to copy (Board is ~80 bytes + a few scalars).
@@ -17,4 +25,5 @@ struct GameState {
   AttackState attack_state;
   bool game_over = false;
   int piece_gen = 0; // incremented on spawn/hold
+  LastClear last_clear;
 };

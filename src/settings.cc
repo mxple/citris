@@ -185,6 +185,12 @@ bool Settings::load(const std::string &path) {
         if (ok)
           ghost_opacity =
               static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
+      } else if (key == "grid_opacity") {
+        int pct;
+        ok = parse_int(val, pct);
+        if (ok)
+          grid_opacity =
+              static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
       } else
         ok = false;
     } else if (section == "controls") {

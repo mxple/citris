@@ -52,12 +52,14 @@ private:
   void draw_stats_text(TimePoint now);
 
   void draw_board_border();
+  void draw_gridlines();
   void draw_board(const Board &board);
   void draw_piece(const Piece &piece);
   void draw_ghost(const Piece &ghost);
   void draw_hold(std::optional<PieceType> hold, bool available);
   void draw_preview(const std::array<PieceType, 6> &preview);
   void draw_game_over();
+  void draw_action_text(const GameState &state);
   void draw_mini_piece(PieceType type, float px, float py, int tile);
   sf::Vector2f grid_to_pixel(int col, int row) const;
 
@@ -81,4 +83,9 @@ private:
   // Stats text rendering.
   sf::Font font_;
   bool font_ok_ = false;
+
+  // Clear action text state.
+  int last_drawn_piece_gen_ = -1;
+  LastClear displayed_clear_;
+  GameState last_state_;
 };

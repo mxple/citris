@@ -39,6 +39,9 @@ struct Settings {
   bool colored_ghost = true;
   uint8_t ghost_opacity = 100; // 0-255, converted from 0-100 in INI
 
+  // Gridlines
+  uint8_t grid_opacity = 40; // 0-255
+
   // Load from INI file. Missing keys keep defaults. Returns false on file
   // error.
   bool load(const std::string &path);
