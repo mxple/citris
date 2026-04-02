@@ -20,6 +20,43 @@ target_link_libraries(tetris_lib PUBLIC SFML::Graphics SFML::Window SFML::System
 add_executable(tetris src/main.cc)
 target_link_libraries(tetris PRIVATE tetris_lib)
 
+# Install rules — exe + runtime data
+install(TARGETS tetris RUNTIME DESTINATION .)
+install(DIRECTORY assets/ DESTINATION assets)
+install(FILES settings.ini DESTINATION .)
+
+# On Windows, bundle shared libs next to the exe
+if(WIN32)
+  # Collect SFML (and transitive) DLLs from vcpkg
+  install(DIRECTORY "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/"
+    DESTINATION . FILES_MATCHING PATTERN "*.dll")
+
+  # MinGW runtime DLLs — check compiler dir and sysroot bin
+  get_filename_component(_compiler_dir ${CMAKE_CXX_COMPILER} DIRECTORY)
+  file(GLOB _mingw_dlls
+    "${_compiler_dir}/libstdc++-6.dll"
+    "${_compiler_dir}/libgcc_s_seh-1.dll"
+    "${_compiler_dir}/libwinpthread-1.dll"
+    "${CMAKE_FIND_ROOT_PATH}/bin/libstdc++-6.dll"
+    "${CMAKE_FIND_ROOT_PATH}/bin/libgcc_s_seh-1.dll"
+    "${CMAKE_FIND_ROOT_PATH}/bin/libwinpthread-1.dll"
+    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libstdc++-6.dll"
+    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libgcc_s_seh-1.dll"
+    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libwinpthread-1.dll")
+  list(REMOVE_DUPLICATES _mingw_dlls)
+  install(FILES ${_mingw_dlls} DESTINATION .)
+endif()
+
+# CPack — produces a zip on Windows, tar.gz on Linux
+set(CPACK_PACKAGE_NAME "tetris")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+if(WIN32)
+  set(CPACK_GENERATOR "ZIP")
+else()
+  set(CPACK_GENERATOR "TGZ")
+endif()
+include(CPack)
+
 # Tests — each test/*.cc becomes its own executable
 file(GLOB TEST_SOURCES "test/*.cc")
 foreach(test_src ${TEST_SOURCES})

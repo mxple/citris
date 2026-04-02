@@ -4,7 +4,6 @@
 #include "piece.h"
 #include <array>
 #include <cstdint>
-#include <sys/types.h>
 
 enum class CellColor : uint8_t { Empty, I, O, T, S, Z, J, L, Garbage };
 
@@ -24,7 +23,7 @@ public:
   bool collides(const Piece &piece) const;
   void place(const Piece &piece);
   int clear_lines();
-  void add_garbage(uint count, uint gap_col);
+  void add_garbage(unsigned count, unsigned gap_col);
   SpinKind detect_spin(const Piece &piece) const;
   bool filled(int col, int row) const;
 

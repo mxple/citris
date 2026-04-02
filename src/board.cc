@@ -29,13 +29,13 @@ int Board::clear_lines() {
   return count;
 }
 
-void Board::add_garbage(uint count, uint gap_col) {
+void Board::add_garbage(unsigned count, unsigned gap_col) {
   assert(count < kTotalHeight);
   assert(gap_col < kWidth);
 
   std::move_backward(cells_.begin(), cells_.end() - count, cells_.end());
 
-  for (uint i = 0; i < count; i++) {
+  for (unsigned i = 0; i < count; i++) {
     cells_[i].fill(CellColor::Garbage);
     cells_[i][gap_col] = CellColor::Empty;
   }
