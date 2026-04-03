@@ -4,6 +4,8 @@ A modern Tetris training tool aiming to be the best tool of its kind out there.
 
 **This project is under development.** More features are on the way.
 
+<img width="876" height="873" alt="image" src="https://github.com/user-attachments/assets/95ea8843-55fb-4c14-a4fb-0f235865632f" />
+
 ## Default controls
 
 | Key | Action |
