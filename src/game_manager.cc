@@ -118,6 +118,12 @@ bool GameManager::process(const Event &ev) {
       reset();
       return true;
     }
+    if (kp->key == settings_.undo && mode_ == GameMode::Solo) {
+      if (game_->undo()) {
+        player_->reset_input_state();
+      }
+      return true;
+    }
   }
   return false;
 }

@@ -35,6 +35,27 @@ public:
     };
   }
 
+  struct UndoState {
+    int lines, attack, pcs, inputs, pieces;
+    int combo, b2b;
+    TimePoint start_time;
+  };
+
+  UndoState snapshot() const {
+    return {lines_, attack_, pcs_, inputs_, pieces_, combo_, b2b_, start_time_};
+  }
+
+  void restore_for_undo(const UndoState &s) {
+    lines_ = s.lines;
+    attack_ = s.attack;
+    pcs_ = s.pcs;
+    inputs_ = s.inputs;
+    pieces_ = s.pieces;
+    combo_ = s.combo;
+    b2b_ = s.b2b;
+    start_time_ = s.start_time;
+  }
+
   void reset() {
     lines_ = attack_ = pcs_ = inputs_ = pieces_ = 0;
     combo_ = b2b_ = 0;

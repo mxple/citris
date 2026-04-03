@@ -201,6 +201,20 @@ void HumanPlayer::cancel_sonic_drop(std::vector<Event> &pending) {
   }
 }
 
+void HumanPlayer::reset_input_state() {
+  timers_.cancel(TimerKind::DAS_Left);
+  timers_.cancel(TimerKind::DAS_Right);
+  timers_.cancel(TimerKind::ARR_Left);
+  timers_.cancel(TimerKind::ARR_Right);
+  timers_.cancel(TimerKind::SoftDrop);
+  held_[0] = held_[1] = false;
+  das_charged_[0] = das_charged_[1] = false;
+  active_direction_.reset();
+  soft_drop_held_ = false;
+  sonic_drop_active_ = false;
+  arr0_direction_.reset();
+}
+
 std::optional<Input> HumanPlayer::key_to_input(sf::Keyboard::Key key) const {
   auto it = key_map_.find(key);
   if (it != key_map_.end())

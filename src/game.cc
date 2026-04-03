@@ -199,6 +199,7 @@ void Game::spawn_piece() {
 
   settle();
   arm_gravity();
+  push_snapshot();
 }
 
 void Game::lock_piece() {
@@ -316,6 +317,64 @@ bool Game::apply_sonic_drop() {
 
 void Game::settle() {
   while (apply_sonic_drop() | apply_arr0()) {}
+}
+
+void Game::push_snapshot() {
+  if (undo_stack_.size() >= kMaxUndoDepth)
+    undo_stack_.pop_front();
+  undo_stack_.push_back(GameSnapshot{
+      board_,
+      current_piece_,
+      hold_piece_,
+      hold_available_,
+      attack_state_,
+      lock_resets_remaining_,
+      pending_garbage_,
+      last_clear_,
+      piece_gen_,
+      pending_attack_,
+      game_over_,
+      last_move_was_rotation_,
+      bag_->snapshot(),
+      stats_.snapshot(),
+  });
+}
+
+void Game::restore_snapshot(const GameSnapshot &snap) {
+  board_ = snap.board;
+  current_piece_ = snap.current_piece;
+  hold_piece_ = snap.hold_piece;
+  hold_available_ = snap.hold_available;
+  attack_state_ = snap.attack_state;
+  lock_resets_remaining_ = snap.lock_resets_remaining;
+  pending_garbage_ = snap.pending_garbage;
+  last_clear_ = snap.last_clear;
+  piece_gen_ = snap.piece_gen;
+  pending_attack_ = snap.pending_attack;
+  game_over_ = snap.game_over;
+  last_move_was_rotation_ = snap.last_move_was_rotation;
+  bag_->restore(snap.bag_snapshot);
+  stats_.restore_for_undo(snap.stats_snapshot);
+
+  timers_.cancel(TimerKind::Gravity);
+  timers_.cancel(TimerKind::LockDelay);
+  timers_.cancel(TimerKind::GarbageDelay);
+
+  arr_direction_.reset();
+  soft_drop_active_ = false;
+  hard_drop_blocked_until_ = {};
+
+  settle();
+  arm_gravity();
+  dirty_ = true;
+}
+
+bool Game::undo() {
+  if (undo_stack_.size() <= 1)
+    return false;
+  undo_stack_.pop_back();
+  restore_snapshot(undo_stack_.back());
+  return true;
 }
 
 bool Game::apply_arr0() {

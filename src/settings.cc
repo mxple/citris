@@ -210,6 +210,8 @@ bool Settings::load(const std::string &path) {
         ok = parse_key(val, soft_drop);
       else if (key == "hold")
         ok = parse_key(val, hold);
+      else if (key == "undo")
+        ok = parse_key(val, undo);
       else
         ok = false;
     } else if (section == "tuning") {

@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "stats.h"
 #include "timer_manager.h"
+#include <deque>
 #include <optional>
 #include <vector>
 
@@ -24,6 +25,8 @@ public:
   void clear_dirty() { dirty_ = false; }
 
   int drain_attack();
+
+  bool undo();
 
 private:
   void handle_move(const MoveInput &e);
@@ -47,6 +50,34 @@ private:
   bool apply_sonic_drop();
   void settle();
 
+  struct PendingGarbage {
+    int lines;
+    int gap_col;
+  };
+
+  struct GameSnapshot {
+    Board board;
+    Piece current_piece;
+    std::optional<PieceType> hold_piece;
+    bool hold_available;
+    AttackState attack_state;
+    int lock_resets_remaining;
+    std::vector<PendingGarbage> pending_garbage;
+    LastClear last_clear;
+    int piece_gen;
+    int pending_attack;
+    bool game_over;
+    bool last_move_was_rotation;
+    BagRandomizer::BagSnapshot bag_snapshot;
+    Stats::UndoState stats_snapshot;
+  };
+
+  void push_snapshot();
+  void restore_snapshot(const GameSnapshot &snap);
+
+  static constexpr int kMaxUndoDepth = 100;
+  std::deque<GameSnapshot> undo_stack_;
+
   const Settings &settings_;
   Stats &stats_;
   TimerManager &timers_;
@@ -59,10 +90,6 @@ private:
   std::unique_ptr<BagRandomizer> bag_;
   int lock_resets_remaining_ = 0;
 
-  struct PendingGarbage {
-    int lines;
-    int gap_col;
-  };
   std::vector<PendingGarbage> pending_garbage_;
 
   LastClear last_clear_;

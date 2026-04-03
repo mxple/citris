@@ -29,6 +29,17 @@ public:
     return {queue_.begin(), queue_.begin() + count};
   }
 
+  struct BagSnapshot {
+    std::mt19937 rng;
+    std::deque<PieceType> queue;
+  };
+
+  BagSnapshot snapshot() const { return {rng_, queue_}; }
+  void restore(const BagSnapshot &snap) {
+    rng_ = snap.rng;
+    queue_ = snap.queue;
+  }
+
 protected:
   static constexpr int kMinPieces = 7;
 

@@ -11,14 +11,15 @@ struct Settings {
   std::string font_path = "assets/FreeMono.otf";
 
   // Controls
-  sf::Keyboard::Key move_left = sf::Keyboard::Key::J;
-  sf::Keyboard::Key move_right = sf::Keyboard::Key::L;
-  sf::Keyboard::Key rotate_cw = sf::Keyboard::Key::D;
-  sf::Keyboard::Key rotate_ccw = sf::Keyboard::Key::S;
+  sf::Keyboard::Key move_left = sf::Keyboard::Key::Left;
+  sf::Keyboard::Key move_right = sf::Keyboard::Key::Right;
+  sf::Keyboard::Key rotate_cw = sf::Keyboard::Key::Up;
+  sf::Keyboard::Key rotate_ccw = sf::Keyboard::Key::Z;
   sf::Keyboard::Key rotate_180 = sf::Keyboard::Key::A;
   sf::Keyboard::Key hard_drop = sf::Keyboard::Key::Space;
-  sf::Keyboard::Key soft_drop = sf::Keyboard::Key::K;
-  sf::Keyboard::Key hold = sf::Keyboard::Key::LShift;
+  sf::Keyboard::Key soft_drop = sf::Keyboard::Key::Down;
+  sf::Keyboard::Key hold = sf::Keyboard::Key::C;
+  sf::Keyboard::Key undo = sf::Keyboard::Key::U;
 
   // Input tuning
   std::chrono::milliseconds das{110};

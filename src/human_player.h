@@ -13,6 +13,7 @@ public:
 
   bool process(const Event &ev, TimePoint now,
                std::vector<Event> &pending) override;
+  void reset_input_state() override;
 
 private:
   std::optional<Input> key_to_input(sf::Keyboard::Key key) const;

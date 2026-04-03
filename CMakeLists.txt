@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(tetris LANGUAGES CXX)
+project(citris LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,13 +17,13 @@ target_include_directories(tetris_lib PUBLIC src)
 target_link_libraries(tetris_lib PUBLIC SFML::Graphics SFML::Window SFML::System)
 
 # Main executable
-add_executable(tetris src/main.cc)
-target_link_libraries(tetris PRIVATE tetris_lib)
+add_executable(citris src/main.cc)
+target_link_libraries(citris PRIVATE tetris_lib)
 
 # Install rules — exe + runtime data
-install(TARGETS tetris RUNTIME DESTINATION .)
+install(TARGETS citris RUNTIME DESTINATION .)
 install(DIRECTORY assets/ DESTINATION assets)
-install(FILES settings.ini DESTINATION .)
+install(FILES assets/default_settings.ini DESTINATION . RENAME settings.ini)
 
 # On Windows, bundle shared libs next to the exe
 if(WIN32)
@@ -48,8 +48,8 @@ if(WIN32)
 endif()
 
 # CPack — produces a zip on Windows, tar.gz on Linux
-set(CPACK_PACKAGE_NAME "tetris")
-set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_NAME "citris")
+set(CPACK_PACKAGE_VERSION "0.1.0")
 if(WIN32)
   set(CPACK_GENERATOR "ZIP")
 else()
