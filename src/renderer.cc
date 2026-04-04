@@ -241,9 +241,8 @@ void Renderer::draw_board(const Board &board) {
 void Renderer::draw_piece(const Piece &piece) {
   int tile = piece_to_skin(piece.type);
   for (auto &cell : piece.cells_absolute()) {
-    if (cell.y < Board::kVisibleHeight)
-      push_tile(grid_to_pixel(cell.x, cell.y), {L::kTileSize, L::kTileSize},
-                tile);
+    // if (cell.y < Board::kVisibleHeight)
+    push_tile(grid_to_pixel(cell.x, cell.y), {L::kTileSize, L::kTileSize}, tile);
   }
 }
 
