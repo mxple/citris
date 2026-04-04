@@ -3,7 +3,14 @@
 #include <chrono>
 #include <string>
 
-using Duration = std::chrono::steady_clock::duration;
+struct GameTuning {
+  std::chrono::milliseconds gravity_interval{10000};
+  std::chrono::milliseconds lock_delay{5000};
+  std::chrono::milliseconds garbage_delay{250};
+  std::chrono::milliseconds hard_drop_delay{50};
+  int max_lock_resets = 15;
+  bool infinite_hold = false;
+};
 
 struct Settings {
   // Rendering
@@ -25,25 +32,17 @@ struct Settings {
   std::chrono::milliseconds das{110};
   std::chrono::milliseconds arr{0};
   std::chrono::milliseconds soft_drop_interval{0};
-  bool das_preserve_charge =
-      true; // preserve DAS charge when direction interrupted
+  bool das_preserve_charge = true;
 
-  // Game tuning
-  std::chrono::milliseconds gravity_interval{10000};
-  std::chrono::milliseconds lock_delay{5000};
-  std::chrono::milliseconds garbage_delay{250};
-  int max_lock_resets = 15;
-  bool infinite_hold = false;
-  std::chrono::milliseconds hard_drop_delay{50};
+  // Game tuning (from [game] INI section, applied to freeplay)
+  GameTuning game;
 
   // Ghost piece rendering
   bool colored_ghost = true;
-  uint8_t ghost_opacity = 100; // 0-255, converted from 0-100 in INI
+  uint8_t ghost_opacity = 100;
 
   // Gridlines
-  uint8_t grid_opacity = 40; // 0-255
+  uint8_t grid_opacity = 40;
 
-  // Load from INI file. Missing keys keep defaults. Returns false on file
-  // error.
   bool load(const std::string &path);
 };

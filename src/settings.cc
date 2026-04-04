@@ -154,11 +154,9 @@ bool Settings::load(const std::string &path) {
     ++line_num;
     line = trim(line);
 
-    // Skip empty lines and comments
     if (line.empty() || line[0] == '#' || line[0] == ';')
       continue;
 
-    // Section header
     if (line[0] == '[') {
       auto end = line.find(']');
       if (end != std::string::npos)
@@ -166,7 +164,6 @@ bool Settings::load(const std::string &path) {
       continue;
     }
 
-    // Key = value
     auto eq = line.find('=');
     if (eq == std::string::npos)
       continue;
@@ -227,17 +224,17 @@ bool Settings::load(const std::string &path) {
         ok = false;
     } else if (section == "game") {
       if (key == "gravity_interval")
-        ok = parse_ms(val, gravity_interval);
+        ok = parse_ms(val, game.gravity_interval);
       else if (key == "lock_delay")
-        ok = parse_ms(val, lock_delay);
+        ok = parse_ms(val, game.lock_delay);
       else if (key == "garbage_delay")
-        ok = parse_ms(val, garbage_delay);
+        ok = parse_ms(val, game.garbage_delay);
       else if (key == "max_lock_resets")
-        ok = parse_int(val, max_lock_resets);
+        ok = parse_int(val, game.max_lock_resets);
       else if (key == "infinite_hold")
-        ok = parse_bool(val, infinite_hold);
+        ok = parse_bool(val, game.infinite_hold);
       else if (key == "hard_drop_delay")
-        ok = parse_ms(val, hard_drop_delay);
+        ok = parse_ms(val, game.hard_drop_delay);
       else
         ok = false;
     } else {
