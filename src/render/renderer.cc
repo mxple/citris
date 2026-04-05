@@ -1,10 +1,10 @@
 #include "renderer.h"
+#include "font.h"
 #include <cstdio>
 #include <iostream>
 
 using L = RenderLayout;
 
-// Fallback pastel colors indexed by CellColor enum (0=Empty..8=Garbage).
 static constexpr sf::Color kFallbackColors[] = {
     sf::Color::Transparent,   // Empty
     sf::Color(135, 206, 250), // I
@@ -17,8 +17,6 @@ static constexpr sf::Color kFallbackColors[] = {
     sf::Color(128, 128, 128), // Garbage
 };
 
-// CellColor -> skin tile index.
-// Skin order: Z=0, L=1, O=2, S=3, I=4, J=5, T=6, ghost=7, garbage=8, ...
 int Renderer::cell_to_skin(CellColor cc) {
   switch (cc) {
   case CellColor::Z:
@@ -38,7 +36,7 @@ int Renderer::cell_to_skin(CellColor cc) {
   case CellColor::Garbage:
     return L::kSkinGarbage;
   case CellColor::Empty:
-    return 0; // shouldn't be called
+    return 0;
   }
   return 0;
 }
@@ -47,11 +45,10 @@ int Renderer::piece_to_skin(PieceType type) {
   return cell_to_skin(piece_to_cell_color(type));
 }
 
-Renderer::Renderer(sf::RenderWindow &window, const Settings &settings,
-                   Stats &stats)
-    : window_(window), settings_(settings), stats_(stats),
+Renderer::Renderer(sf::RenderWindow &window, const Settings &settings)
+    : window_(window), settings_(settings),
       tex_verts_(sf::PrimitiveType::Triangles),
-      solid_verts_(sf::PrimitiveType::Triangles) {
+      solid_verts_(sf::PrimitiveType::Triangles), font_(get_font()) {
   board_x_ = L::kBoardPadX * L::kTileSize;
   board_y_ = 1 * L::kTileSize;
 
@@ -65,53 +62,41 @@ Renderer::Renderer(sf::RenderWindow &window, const Settings &settings,
   if (!board_tex_.resize({static_cast<unsigned>(L::kWindowW),
                           static_cast<unsigned>(L::kWindowH)}))
     std::cerr << "Failed to create board render texture\n";
-
-  if (!settings_.font_path.empty()) {
-    font_ok_ = font_.openFromFile(settings_.font_path);
-    if (!font_ok_)
-      std::cerr << "Failed to load font: " << settings_.font_path << "\n";
-  }
 }
 
 void Renderer::handle_resize(unsigned int width, unsigned int height) {
-  auto view = window_.getView();
-  float logicalW = L::kWindowW;
-  float logicalH = L::kWindowH;
-  float windowW = static_cast<float>(width);
-  float windowH = static_cast<float>(height);
-  float scale = std::min(windowW / logicalW, windowH / logicalH);
-  float viewportW = (logicalW * scale) / windowW;
-  float viewportH = (logicalH * scale) / windowH;
-  float viewportX = (1.f - viewportW) / 2.f;
-  float viewportY = (1.f - viewportH) / 2.f;
-  view.setSize({logicalW, logicalH});
-  view.setCenter({logicalW / 2.f, logicalH / 2.f});
-  view.setViewport({{viewportX, viewportY}, {viewportW, viewportH}});
-  window_.setView(view);
+  ::handle_resize(window_, width, height);
 }
 
-void Renderer::draw(const GameState &state) {
-  if (state.last_clear.piece_gen != last_drawn_piece_gen_ &&
-      (state.last_clear.lines > 0 ||
-       state.last_clear.spin != SpinKind::None)) {
-    last_drawn_piece_gen_ = state.last_clear.piece_gen;
-    displayed_clear_ = state.last_clear;
+void Renderer::draw(const ViewModel &vm) {
+  if (vm.state.last_clear.piece_gen != last_drawn_piece_gen_ &&
+      (vm.state.last_clear.lines > 0 ||
+       vm.state.last_clear.spin != SpinKind::None)) {
+    last_drawn_piece_gen_ = vm.state.last_clear.piece_gen;
+    displayed_clear_ = vm.state.last_clear;
   }
-  last_state_ = state;
+  last_state_ = vm.state;
 
-  render_board_scene(state);
-  blit_and_present();
+  render_board_scene(vm.state);
+  blit_and_present(vm);
 }
 
-void Renderer::draw_stats() { blit_and_present(); }
+void Renderer::draw_stats(const ViewModel &vm) {
+  last_state_ = vm.state;
+  blit_and_present(vm);
+}
 
-void Renderer::blit_and_present() {
+void Renderer::blit_and_present(const ViewModel &vm) {
   window_.clear(sf::Color(20, 20, 20));
   sf::Sprite board_sprite(board_tex_.getTexture());
   window_.draw(board_sprite);
-  auto now = std::chrono::steady_clock::now();
-  draw_stats_text(now);
+
+  draw_stats_text(vm.stats);
   draw_action_text(last_state_);
+
+  if (vm.hud)
+    draw_hud(*vm.hud, vm.state);
+
   window_.display();
 }
 
@@ -142,21 +127,15 @@ void Renderer::render_board_scene(const GameState &state) {
   board_tex_.display();
 }
 
-void Renderer::draw_stats_text(TimePoint now) {
-  if (!font_ok_)
-    return;
-
-  auto stats = stats_.snapshot(now);
-
+void Renderer::draw_stats_text(const Stats::Snapshot &stats) {
   constexpr unsigned int kFontSize = 20;
   constexpr float kLineH = 22.f;
   const sf::Color kLabelColor(140, 140, 140);
   const sf::Color kValueColor(220, 220, 220);
 
   float x = 10.f;
-  // Below hold piece: hold is at board_y_ + kTileSize, ~3 tiles tall.
   float y = board_y_ + L::kTileSize * 5.f;
-  float val_x = x + 60.f; // TODO: tune column offset
+  float val_x = x + 60.f;
 
   auto draw_line = [&](const char *label, const std::string &value) {
     sf::Text lbl(font_, label, kFontSize);
@@ -180,17 +159,100 @@ void Renderer::draw_stats_text(TimePoint now) {
     return buf;
   };
 
+  auto fmt_time = [](float secs) -> std::string {
+    int total_ms = static_cast<int>(secs * 1000);
+    int mins = total_ms / 60000;
+    int s = (total_ms % 60000) / 1000;
+    int tenths = (total_ms % 1000) / 100;
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%d:%02d.%d", mins, s, tenths);
+    return buf;
+  };
+
+  draw_line("TIME", fmt_time(stats.elapsed_s));
   draw_line("B2B", std::to_string(stats.b2b));
   draw_line("CMB", std::to_string(stats.combo));
   draw_line("LNS", std::to_string(stats.lines));
   draw_line("ATK", std::to_string(stats.attack));
   draw_line("PC", std::to_string(stats.pcs));
 
-  y += kLineH * 0.5f; // gap before rates
+  y += kLineH * 0.5f;
 
   draw_line("KPS", fmt_rate(stats.inputs, stats.elapsed_s));
   draw_line("PPS", fmt_rate(stats.pieces, stats.elapsed_s));
   draw_line("APS", fmt_rate(stats.attack, stats.elapsed_s));
+}
+
+void Renderer::draw_action_text(const GameState &state) {
+  if (displayed_clear_.lines == 0)
+    return;
+
+  std::string label;
+  switch (displayed_clear_.spin) {
+  case SpinKind::TSpin:
+    label = "tspin ";
+    break;
+  case SpinKind::Mini:
+    label = "tspin mini ";
+    break;
+  case SpinKind::AllSpin:
+    label = "allspin ";
+    break;
+  case SpinKind::None:
+    break;
+  }
+
+  static constexpr const char *kLineNames[] = {"", "single", "double", "triple",
+                                               "quad"};
+  int idx = std::clamp(displayed_clear_.lines, 0, 4);
+  label += kLineNames[idx];
+
+  constexpr unsigned int kFontSize = 20;
+  float x = 10.f;
+  float y = board_y_ + L::kTileSize * 5.f + 22.f * 9.f;
+
+  sf::Text text(font_, label, kFontSize);
+  text.setFillColor(sf::Color(255, 255, 100));
+  text.setPosition({x, y});
+  window_.draw(text);
+
+  if (displayed_clear_.perfect_clear) {
+    sf::Text pc_text(font_, "perfect clear", kFontSize);
+    pc_text.setFillColor(sf::Color(255, 200, 50));
+    pc_text.setPosition({x, y + 22.f});
+    window_.draw(pc_text);
+  }
+}
+
+void Renderer::draw_hud(const HudData &hud, const GameState &state) {
+  float cx = board_x_ + 5.f * L::kTileSize;
+
+  if (!hud.center_text.empty()) {
+    sf::Text text(font_, hud.center_text, 28);
+    text.setFillColor(hud.center_color);
+    auto bounds = text.getLocalBounds();
+    float bottom = board_y_ + 20.f * L::kTileSize + 5.f;
+    text.setPosition({cx - bounds.size.x / 2.f, bottom});
+    window_.draw(text);
+  }
+
+  if (state.game_over && !hud.game_over_label.empty()) {
+    float cy = board_y_ + 10.f * L::kTileSize;
+
+    sf::Text label(font_, hud.game_over_label, 28);
+    label.setFillColor(hud.game_over_label_color);
+    auto lb = label.getLocalBounds();
+    label.setPosition({cx - lb.size.x / 2.f, cy - 50.f});
+    window_.draw(label);
+
+    if (!hud.game_over_detail.empty()) {
+      sf::Text detail(font_, hud.game_over_detail, hud.game_over_detail_size);
+      detail.setFillColor(hud.game_over_detail_color);
+      auto db = detail.getLocalBounds();
+      detail.setPosition({cx - db.size.x / 2.f, cy});
+      window_.draw(detail);
+    }
+  }
 }
 
 void Renderer::draw_board_border() {
@@ -214,12 +276,10 @@ void Renderer::draw_gridlines() {
   float bw = Board::kWidth * L::kTileSize;
   float bh = Board::kVisibleHeight * L::kTileSize;
 
-  // 9 vertical lines
   for (int col = 1; col < Board::kWidth; ++col) {
     float x = bx + col * L::kTileSize;
     push_solid({x, by}, {1, bh}, c);
   }
-  // 19 horizontal lines
   for (int row = 1; row < Board::kVisibleHeight; ++row) {
     float y = by + row * L::kTileSize;
     push_solid({bx, y}, {bw, 1}, c);
@@ -241,8 +301,8 @@ void Renderer::draw_board(const Board &board) {
 void Renderer::draw_piece(const Piece &piece) {
   int tile = piece_to_skin(piece.type);
   for (auto &cell : piece.cells_absolute()) {
-    // if (cell.y < Board::kVisibleHeight)
-    push_tile(grid_to_pixel(cell.x, cell.y), {L::kTileSize, L::kTileSize}, tile);
+    push_tile(grid_to_pixel(cell.x, cell.y), {L::kTileSize, L::kTileSize},
+              tile);
   }
 }
 
@@ -279,48 +339,6 @@ void Renderer::draw_game_over() {
   push_solid({0, 0}, {L::kWindowW, L::kWindowH}, sf::Color(0, 0, 0, 150));
 }
 
-void Renderer::draw_action_text(const GameState &state) {
-  if (!font_ok_ || displayed_clear_.lines == 0)
-    return;
-
-  // Build label
-  std::string label;
-  switch (displayed_clear_.spin) {
-  case SpinKind::TSpin:
-    label = "tspin ";
-    break;
-  case SpinKind::Mini:
-    label = "tspin mini ";
-    break;
-  case SpinKind::AllSpin:
-    label = "allspin ";
-    break;
-  case SpinKind::None:
-    break;
-  }
-
-  static constexpr const char *kLineNames[] = {"", "single", "double",
-                                                "triple", "quad"};
-  int idx = std::clamp(displayed_clear_.lines, 0, 4);
-  label += kLineNames[idx];
-
-  constexpr unsigned int kFontSize = 20;
-  float x = 10.f;
-  float y = board_y_ + L::kTileSize * 5.f + 22.f * 9.f;
-
-  sf::Text text(font_, label, kFontSize);
-  text.setFillColor(sf::Color(255, 255, 100));
-  text.setPosition({x, y});
-  window_.draw(text);
-
-  if (displayed_clear_.perfect_clear) {
-    sf::Text pc_text(font_, "perfect clear", kFontSize);
-    pc_text.setFillColor(sf::Color(255, 200, 50));
-    pc_text.setPosition({x, y + 22.f});
-    window_.draw(pc_text);
-  }
-}
-
 void Renderer::draw_mini_piece(PieceType type, float px, float py, int tile) {
   int ti = static_cast<int>(type);
   auto &cells = kPieceCells[ti][static_cast<int>(Rotation::North)];
@@ -338,8 +356,6 @@ sf::Vector2f Renderer::grid_to_pixel(int col, int row) const {
 void Renderer::push_tile(sf::Vector2f pos, sf::Vector2f size, int tile_idx,
                          sf::Color tint) {
   if (!skin_ok_) {
-    // Fallback: use CellColor-indexed pastels. Skin tile -> approximate
-    // CellColor. Skin: Z=0,L=1,O=2,S=3,I=4,J=5,T=6,ghost=7,garbage=8,...
     static constexpr int kSkinToCellColor[] = {5, 7, 2, 4, 1, 6,
                                                3, 0, 8, 8, 0, 0};
     int cc = kSkinToCellColor[tile_idx];
@@ -350,7 +366,6 @@ void Renderer::push_tile(sf::Vector2f pos, sf::Vector2f size, int tile_idx,
     return;
   }
 
-  // Skin tiles are 30x30 at 31px pitch (30 + 1px separator).
   float tx0 = static_cast<float>(tile_idx * L::kSkinPitch);
   float tx1 = tx0 + L::kSkinTile;
   float ty0 = 0.f;
@@ -382,4 +397,22 @@ void Renderer::push_solid(sf::Vector2f pos, sf::Vector2f size,
   solid_verts_.append(sf::Vertex{tl, color});
   solid_verts_.append(sf::Vertex{br, color});
   solid_verts_.append(sf::Vertex{bl, color});
+}
+
+void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h) {
+  float logicalW = static_cast<float>(L::kWindowW);
+  float logicalH = static_cast<float>(L::kWindowH);
+  float windowW = static_cast<float>(w);
+  float windowH = static_cast<float>(h);
+  float scale = std::min(windowW / logicalW, windowH / logicalH);
+  float viewportW = (logicalW * scale) / windowW;
+  float viewportH = (logicalH * scale) / windowH;
+  float viewportX = (1.f - viewportW) / 2.f;
+  float viewportY = (1.f - viewportH) / 2.f;
+
+  auto view = window.getView();
+  view.setSize({logicalW, logicalH});
+  view.setCenter({logicalW / 2.f, logicalH / 2.f});
+  view.setViewport({{viewportX, viewportY}, {viewportW, viewportH}});
+  window.setView(view);
 }
