@@ -9,12 +9,40 @@ set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
 find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
 
+# Embed font as C header via xxd
+set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
+set(FONT_HEADER "${CMAKE_BINARY_DIR}/generated/FreeMono_otf.h")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+add_custom_command(
+  OUTPUT "${FONT_HEADER}"
+  COMMAND xxd -i FreeMono.otf "${FONT_HEADER}"
+  COMMAND sed -i "s/^unsigned/inline unsigned/" "${FONT_HEADER}"
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
+  DEPENDS "${FONT_INPUT}"
+  COMMENT "Embedding FreeMono.otf via xxd"
+)
+add_custom_target(embed_font DEPENDS "${FONT_HEADER}")
+
 # Game library (all src/ except main.cc) — shared between main exe and tests
-file(GLOB LIB_SOURCES "src/*.cc")
+file(GLOB LIB_SOURCES
+  "src/*.cc"
+  "src/engine/*.cc"
+  "src/controller/*.cc"
+  "src/render/*.cc"
+  "src/presets/*.cc"
+)
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
-target_include_directories(tetris_lib PUBLIC src)
+target_include_directories(tetris_lib PUBLIC
+  src
+  src/engine
+  src/controller
+  src/render
+  src/presets
+  "${CMAKE_BINARY_DIR}/generated"
+)
 target_link_libraries(tetris_lib PUBLIC SFML::Graphics SFML::Window SFML::System)
+add_dependencies(tetris_lib embed_font)
 
 # Main executable
 add_executable(citris src/main.cc)
