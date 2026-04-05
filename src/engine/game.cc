@@ -1,44 +1,64 @@
 #include "game.h"
+#include "presets/game_mode.h"
 #include "srs.h"
 
-Game::Game(const Settings &settings, Stats &stats, TimerManager &timers,
-           unsigned seed)
-    : settings_(settings), stats_(stats), timers_(timers) {
+Game::Game(const GameMode &mode, Board board, unsigned seed)
+    : mode_(mode), board_(std::move(board)) {
   bag_ = std::make_unique<SevenBagRandomizer>(seed);
   now_ = std::chrono::steady_clock::now();
   spawn_piece();
 }
 
-bool Game::process(const Event &ev, TimePoint now) {
-  std::visit(
-      [&](auto &&e) {
-        using T = std::decay_t<decltype(e)>;
-        if (game_over_)
-          return true;
-        now_ = now;
-        if constexpr (std::is_same_v<T, MoveInput>) {
-          handle_move(e);
-        } else if constexpr (std::is_same_v<T, Gravity>) {
-          handle_gravity();
-        } else if constexpr (std::is_same_v<T, LockDelayExpired>) {
-          handle_lock_delay_expired();
-        } else if constexpr (std::is_same_v<T, GarbageReceived>) {
-          handle_garbage_received(e);
-        } else if constexpr (std::is_same_v<T, GarbageDelayExpired>) {
-          handle_garbage_delay_expired();
-        } else if constexpr (std::is_same_v<T, ARRActive>) {
-          arr_direction_ = e.direction;
-        } else if constexpr (std::is_same_v<T, ARRInactive>) {
-          arr_direction_.reset();
-        } else if constexpr (std::is_same_v<T, SoftDropActive>) {
-          soft_drop_active_ = true;
-        } else if constexpr (std::is_same_v<T, SoftDropInactive>) {
-          soft_drop_active_ = false;
-        }
-        return true;
-      },
-      ev);
-  return false;
+void Game::apply(const CommandBuffer &cmds) {
+  for (const auto &cmd : cmds) {
+    if (game_over_)
+      break;
+    std::visit(
+        [&](auto &&c) {
+          using T = std::decay_t<decltype(c)>;
+          if constexpr (std::is_same_v<T, cmd::MovePiece>) {
+            handle_move(c);
+          }
+          if constexpr (std::is_same_v<T, cmd::SetARRDirection>) {
+            arr_direction_ = c.direction;
+          }
+          if constexpr (std::is_same_v<T, cmd::SetSoftDropActive>) {
+            soft_drop_active_ = c.active;
+          }
+          if constexpr (std::is_same_v<T, cmd::AddGarbage>) {
+            handle_garbage_received(c.lines, c.gap_col, c.immediate);
+          }
+          if constexpr (std::is_same_v<T, cmd::SetGameOver>) {
+            handle_set_game_over(c.won);
+          }
+          if constexpr (std::is_same_v<T, cmd::Undo>) {
+            handle_undo();
+          }
+          if constexpr (std::is_same_v<T, cmd::Passthrough>) {
+            pending_events_.push_back(c.notification);
+          }
+        },
+        cmd);
+  }
+}
+
+void Game::tick(TimePoint now) {
+  if (game_over_)
+    return;
+  now_ = now;
+
+  if (gravity_deadline_ && now_ >= *gravity_deadline_) {
+    gravity_deadline_.reset();
+    handle_gravity();
+  }
+  if (lock_delay_deadline_ && now_ >= *lock_delay_deadline_) {
+    lock_delay_deadline_.reset();
+    handle_lock_delay_expired();
+  }
+  if (garbage_delay_deadline_ && now_ >= *garbage_delay_deadline_) {
+    garbage_delay_deadline_.reset();
+    handle_garbage_delay_expired();
+  }
 }
 
 GameState Game::state() const {
@@ -56,7 +76,10 @@ GameState Game::state() const {
       .preview = preview_arr,
       .attack_state = attack_state_,
       .game_over = game_over_,
+      .won = won_,
       .piece_gen = piece_gen_,
+      .lines_cleared = lines_cleared_,
+      .total_attack = total_attack_,
       .last_clear = last_clear_,
   };
 }
@@ -67,7 +90,19 @@ int Game::drain_attack() {
   return a;
 }
 
-void Game::handle_move(const MoveInput &e) {
+std::optional<TimePoint> Game::next_deadline() const {
+  std::optional<TimePoint> earliest;
+  auto consider = [&](const std::optional<TimePoint> &tp) {
+    if (tp && (!earliest || *tp < *earliest))
+      earliest = tp;
+  };
+  consider(gravity_deadline_);
+  consider(lock_delay_deadline_);
+  consider(garbage_delay_deadline_);
+  return earliest;
+}
+
+void Game::handle_move(const cmd::MovePiece &e) {
   switch (e.input) {
   case Input::Left:
   case Input::Right: {
@@ -106,7 +141,7 @@ void Game::handle_move(const MoveInput &e) {
       last_move_was_rotation_ = false;
       settle();
       if (!is_grounded()) {
-        timers_.cancel(TimerKind::Gravity);
+        gravity_deadline_.reset();
         arm_gravity();
       } else {
         post_move_timers();
@@ -115,37 +150,34 @@ void Game::handle_move(const MoveInput &e) {
     break;
   }
   case Input::HardDrop: {
-    if (now_ < hard_drop_blocked_until_)
-      break;
     current_piece_ = compute_ghost();
     lock_piece();
     dirty_ = true;
     break;
   }
   case Input::Hold: {
-    if (!hold_available_)
+    if (!mode_.hold_allowed() || !hold_available_)
       break;
     dirty_ = true;
-    if (!settings_.infinite_hold)
+    if (!mode_.infinite_hold())
       hold_available_ = false;
-    timers_.cancel(TimerKind::Gravity);
-    timers_.cancel(TimerKind::LockDelay);
+    gravity_deadline_.reset();
+    lock_delay_deadline_.reset();
+    auto old_type = current_piece_.type;
     if (hold_piece_.has_value()) {
-      auto temp = current_piece_.type;
-      current_piece_ = Piece(hold_piece_.value());
-      hold_piece_ = temp;
+      current_piece_ = Piece(*hold_piece_);
+      hold_piece_ = old_type;
       piece_gen_++;
-      lock_resets_remaining_ = settings_.max_lock_resets;
-      if (board_.collides(current_piece_)) {
-        game_over_ = true;
+      lock_resets_remaining_ = mode_.max_lock_resets();
+      if (top_out())
         return;
-      }
       settle();
       arm_gravity();
     } else {
-      hold_piece_ = current_piece_.type;
+      hold_piece_ = old_type;
       spawn_piece();
     }
+    pending_events_.push_back(eng::HoldUsed{current_piece_.type, old_type});
     break;
   }
   }
@@ -168,34 +200,60 @@ void Game::handle_gravity() {
 
 void Game::handle_lock_delay_expired() {
   lock_piece();
-  hard_drop_blocked_until_ = now_ + settings_.hard_drop_delay;
+  pending_events_.push_back(eng::LockDelayExpired{mode_.hard_drop_delay()});
   dirty_ = true;
 }
 
-void Game::handle_garbage_received(const GarbageReceived &e) {
-  pending_garbage_.push_back({e.lines, e.gap_col});
-  timers_.schedule(TimerKind::GarbageDelay, now_ + settings_.garbage_delay,
-                   GarbageDelayExpired{});
+void Game::handle_garbage_received(int lines, int gap_col, bool immediate) {
+  if (immediate) {
+    board_.add_garbage(lines, gap_col);
+    pending_events_.push_back(eng::GarbageMaterialized{lines});
+    dirty_ = true;
+  } else {
+    pending_garbage_.push_back({lines, gap_col});
+    garbage_delay_deadline_ = now_ + mode_.garbage_delay();
+  }
 }
 
 void Game::handle_garbage_delay_expired() {
+  int total_lines = 0;
   for (auto &g : pending_garbage_) {
     board_.add_garbage(g.lines, g.gap_col);
+    total_lines += g.lines;
   }
   pending_garbage_.clear();
+  if (total_lines > 0)
+    pending_events_.push_back(eng::GarbageMaterialized{total_lines});
   dirty_ = true;
+}
+
+void Game::handle_set_game_over(bool won) {
+  if (game_over_)
+    return;
+  game_over_ = true;
+  won_ = won;
+  pending_events_.push_back(eng::GameOver{won});
+  dirty_ = true;
+}
+
+void Game::handle_undo() {
+  if (undo_stack_.size() <= 1)
+    return;
+  undo_stack_.pop_back();
+  restore_snapshot(undo_stack_.back());
+  pending_events_.push_back(eng::UndoPerformed{});
 }
 
 void Game::spawn_piece() {
   current_piece_ = Piece(bag_->next());
   piece_gen_++;
-  lock_resets_remaining_ = settings_.max_lock_resets;
+  lock_resets_remaining_ = mode_.max_lock_resets();
   last_move_was_rotation_ = false;
 
-  if (board_.collides(current_piece_)) {
-    game_over_ = true;
+  if (top_out())
     return;
-  }
+
+  pending_events_.push_back(eng::PieceSpawned{current_piece_.type});
 
   settle();
   arm_gravity();
@@ -203,35 +261,95 @@ void Game::spawn_piece() {
 }
 
 void Game::lock_piece() {
-  // Detect spin BEFORE placing. AllSpin immobility check must not see the
-  // piece's own cells on the board.
   auto spin = SpinKind::None;
   if (last_move_was_rotation_)
     spin = board_.detect_spin(current_piece_);
 
+  auto locked_type = current_piece_.type;
   board_.place(current_piece_);
 
   int cleared = board_.clear_lines();
+  lines_cleared_ += cleared;
+  int prev_combo = attack_state_.combo;
   int attack = compute_attack_and_update_state(attack_state_, cleared, spin);
   pending_attack_ += attack;
+  total_attack_ += attack;
 
   bool pc = cleared > 0 && board_.is_empty();
   if (cleared > 0 || spin != SpinKind::None) {
     last_clear_ = {cleared, spin, pc, piece_gen_};
   }
 
-  stats_.add_piece();
-  stats_.add_lines(cleared);
-  stats_.add_attack(attack);
-  stats_.set_combo(attack_state_.combo);
-  stats_.set_b2b(attack_state_.b2b);
-  if (pc)
-    stats_.add_perfect_clear();
+  pending_events_.push_back(
+      eng::PieceLocked{locked_type, cleared, spin, pc, attack, prev_combo,
+                       attack_state_.combo, attack_state_.b2b});
 
   hold_available_ = true;
-  timers_.cancel(TimerKind::Gravity);
-  timers_.cancel(TimerKind::LockDelay);
+  gravity_deadline_.reset();
+  lock_delay_deadline_.reset();
   spawn_piece();
+}
+
+bool Game::top_out() {
+  if (!board_.collides(current_piece_))
+    return false;
+  game_over_ = true;
+  won_ = false;
+  pending_events_.push_back(eng::GameOver{false});
+  return true;
+}
+
+void Game::push_snapshot() {
+  if (undo_stack_.size() >= kMaxUndoDepth)
+    undo_stack_.pop_front();
+  undo_stack_.push_back(GameSnapshot{
+      board_,
+      current_piece_,
+      hold_piece_,
+      hold_available_,
+      attack_state_,
+      lock_resets_remaining_,
+      pending_garbage_,
+      last_clear_,
+      piece_gen_,
+      pending_attack_,
+      lines_cleared_,
+      total_attack_,
+      game_over_,
+      won_,
+      last_move_was_rotation_,
+      bag_->snapshot(),
+  });
+}
+
+void Game::restore_snapshot(const GameSnapshot &snap) {
+  board_ = snap.board;
+  current_piece_ = snap.current_piece;
+  hold_piece_ = snap.hold_piece;
+  hold_available_ = snap.hold_available;
+  attack_state_ = snap.attack_state;
+  lock_resets_remaining_ = snap.lock_resets_remaining;
+  pending_garbage_ = snap.pending_garbage;
+  last_clear_ = snap.last_clear;
+  piece_gen_ = snap.piece_gen;
+  pending_attack_ = snap.pending_attack;
+  lines_cleared_ = snap.lines_cleared;
+  total_attack_ = snap.total_attack;
+  game_over_ = snap.game_over;
+  won_ = snap.won;
+  last_move_was_rotation_ = snap.last_move_was_rotation;
+  bag_->restore(snap.bag_snapshot);
+
+  gravity_deadline_.reset();
+  lock_delay_deadline_.reset();
+  garbage_delay_deadline_.reset();
+
+  arr_direction_.reset();
+  soft_drop_active_ = false;
+
+  settle();
+  arm_gravity();
+  dirty_ = true;
 }
 
 Piece Game::compute_ghost() const {
@@ -264,23 +382,28 @@ void Game::post_move_timers() {
     } else {
       lock_piece();
     }
-    timers_.cancel(TimerKind::Gravity);
+    gravity_deadline_.reset();
   } else {
-    timers_.cancel(TimerKind::LockDelay);
-    if (!timers_.active(TimerKind::Gravity))
+    lock_delay_deadline_.reset();
+    if (!gravity_deadline_)
       arm_gravity();
   }
 }
 
 void Game::arm_gravity() {
-  if (settings_.gravity_interval < std::chrono::milliseconds{0})
+  if (mode_.gravity_interval() < std::chrono::milliseconds{0})
     return;
-  if (settings_.gravity_interval == std::chrono::milliseconds{0}) {
+  if (mode_.gravity_interval() == std::chrono::milliseconds{0}) {
     apply_20g();
     return;
   }
-  timers_.schedule(TimerKind::Gravity, now_ + settings_.gravity_interval,
-                   Gravity{});
+  gravity_deadline_ = now_ + mode_.gravity_interval();
+}
+
+void Game::arm_lock_delay() {
+  if (mode_.lock_delay() < std::chrono::milliseconds{0})
+    return;
+  lock_delay_deadline_ = now_ + mode_.lock_delay();
 }
 
 void Game::apply_20g() {
@@ -289,11 +412,9 @@ void Game::apply_20g() {
   arm_lock_delay();
 }
 
-void Game::arm_lock_delay() {
-  if (settings_.lock_delay < std::chrono::milliseconds{0})
-    return;
-  timers_.schedule(TimerKind::LockDelay, now_ + settings_.lock_delay,
-                   LockDelayExpired{});
+void Game::settle() {
+  while (apply_sonic_drop() | apply_arr0())
+    ;
 }
 
 bool Game::apply_sonic_drop() {
@@ -313,68 +434,6 @@ bool Game::apply_sonic_drop() {
     return true;
   }
   return false;
-}
-
-void Game::settle() {
-  while (apply_sonic_drop() | apply_arr0()) {}
-}
-
-void Game::push_snapshot() {
-  if (undo_stack_.size() >= kMaxUndoDepth)
-    undo_stack_.pop_front();
-  undo_stack_.push_back(GameSnapshot{
-      board_,
-      current_piece_,
-      hold_piece_,
-      hold_available_,
-      attack_state_,
-      lock_resets_remaining_,
-      pending_garbage_,
-      last_clear_,
-      piece_gen_,
-      pending_attack_,
-      game_over_,
-      last_move_was_rotation_,
-      bag_->snapshot(),
-      stats_.snapshot(),
-  });
-}
-
-void Game::restore_snapshot(const GameSnapshot &snap) {
-  board_ = snap.board;
-  current_piece_ = snap.current_piece;
-  hold_piece_ = snap.hold_piece;
-  hold_available_ = snap.hold_available;
-  attack_state_ = snap.attack_state;
-  lock_resets_remaining_ = snap.lock_resets_remaining;
-  pending_garbage_ = snap.pending_garbage;
-  last_clear_ = snap.last_clear;
-  piece_gen_ = snap.piece_gen;
-  pending_attack_ = snap.pending_attack;
-  game_over_ = snap.game_over;
-  last_move_was_rotation_ = snap.last_move_was_rotation;
-  bag_->restore(snap.bag_snapshot);
-  stats_.restore_for_undo(snap.stats_snapshot);
-
-  timers_.cancel(TimerKind::Gravity);
-  timers_.cancel(TimerKind::LockDelay);
-  timers_.cancel(TimerKind::GarbageDelay);
-
-  arr_direction_.reset();
-  soft_drop_active_ = false;
-  hard_drop_blocked_until_ = {};
-
-  settle();
-  arm_gravity();
-  dirty_ = true;
-}
-
-bool Game::undo() {
-  if (undo_stack_.size() <= 1)
-    return false;
-  undo_stack_.pop_back();
-  restore_snapshot(undo_stack_.back());
-  return true;
 }
 
 bool Game::apply_arr0() {

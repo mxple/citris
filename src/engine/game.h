@@ -2,22 +2,24 @@
 
 #include "attack.h"
 #include "board.h"
-#include "event.h"
+#include "command.h"
+#include "engine_event.h"
 #include "game_state.h"
 #include "rng.h"
-#include "settings.h"
-#include "stats.h"
-#include "timer_manager.h"
 #include <deque>
 #include <optional>
 #include <vector>
 
+class GameMode;
+
 class Game {
 public:
-  Game(const Settings &settings, Stats &stats, TimerManager &timers,
-       unsigned seed = std::random_device{}());
+  Game(const GameMode &mode, Board board, unsigned seed = std::random_device{}());
 
-  bool process(const Event &ev, TimePoint now);
+  void apply(const CommandBuffer &cmds);
+  void tick(TimePoint now);
+
+  std::vector<EngineEvent> drain_events() { return std::move(pending_events_); }
 
   GameState state() const;
 
@@ -26,17 +28,21 @@ public:
 
   int drain_attack();
 
-  bool undo();
+  std::optional<TimePoint> next_deadline() const;
 
 private:
-  void handle_move(const MoveInput &e);
+  void handle_move(const cmd::MovePiece &e);
   void handle_gravity();
   void handle_lock_delay_expired();
-  void handle_garbage_received(const GarbageReceived &e);
+  void handle_garbage_received(int lines, int gap_col, bool immediate);
   void handle_garbage_delay_expired();
+  void handle_set_game_over(bool won);
+  void handle_undo();
 
+  void push_snapshot();
   void spawn_piece();
   void lock_piece();
+  bool top_out();
   Piece compute_ghost() const;
   bool drop1();
 
@@ -66,21 +72,20 @@ private:
     LastClear last_clear;
     int piece_gen;
     int pending_attack;
+    int lines_cleared;
+    int total_attack;
     bool game_over;
+    bool won;
     bool last_move_was_rotation;
     BagRandomizer::BagSnapshot bag_snapshot;
-    Stats::UndoState stats_snapshot;
   };
 
-  void push_snapshot();
   void restore_snapshot(const GameSnapshot &snap);
 
   static constexpr int kMaxUndoDepth = 100;
   std::deque<GameSnapshot> undo_stack_;
 
-  const Settings &settings_;
-  Stats &stats_;
-  TimerManager &timers_;
+  const GameMode &mode_;
   Board board_;
   Piece current_piece_{PieceType::I};
   std::optional<PieceType> hold_piece_;
@@ -95,11 +100,21 @@ private:
   LastClear last_clear_;
   int piece_gen_ = 0;
   int pending_attack_ = 0;
+  int lines_cleared_ = 0;
+  int total_attack_ = 0;
   bool game_over_ = false;
+  bool won_ = false;
   bool dirty_ = true;
   std::optional<Input> arr_direction_;
   bool soft_drop_active_ = false;
 
   TimePoint now_{};
-  TimePoint hard_drop_blocked_until_{};
+
+  // Internal timers (replacing TimerManager dependency)
+  std::optional<TimePoint> gravity_deadline_;
+  std::optional<TimePoint> lock_delay_deadline_;
+  std::optional<TimePoint> garbage_delay_deadline_;
+
+  // Engine events produced during apply/tick
+  std::vector<EngineEvent> pending_events_;
 };

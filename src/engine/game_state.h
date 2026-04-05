@@ -14,7 +14,6 @@ struct LastClear {
 };
 
 // Read-only snapshot of game state for rendering / AI.
-// Cheap to copy (Board is ~80 bytes + a few scalars).
 struct GameState {
   Board board;
   Piece current_piece{PieceType::I};
@@ -24,6 +23,9 @@ struct GameState {
   std::array<PieceType, 6> preview;
   AttackState attack_state;
   bool game_over = false;
+  bool won = false;
   int piece_gen = 0; // incremented on spawn/hold
+  int lines_cleared = 0;
+  int total_attack = 0;
   LastClear last_clear;
 };

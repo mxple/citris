@@ -1,43 +1,45 @@
 #pragma once
 
-#include "event.h"
-#include "game.h"
-#include "player.h"
-#include "renderer.h"
+#include "command.h"
+#include "controller/controller.h"
+#include "engine/game.h"
+#include "input_event.h"
+#include "presets/game_mode.h"
+#include "render/renderer.h"
+#include "render/view_model.h"
 #include "settings.h"
 #include "stats.h"
-#include "timer_manager.h"
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <memory>
 #include <vector>
 
-enum class GameMode { Solo, VsAI, VsNetwork };
-
 class GameManager {
 public:
-  GameManager(GameMode mode, const Settings &settings);
+  GameManager(sf::RenderWindow &window, const Settings &settings,
+              std::unique_ptr<GameMode> mode);
 
   void run();
 
 private:
-  bool process(const Event &ev);
   void reset();
-  void route_garbage(TimePoint now);
+  void process_engine_events(TimePoint now, CommandBuffer &rule_cmds);
+  void route_garbage(TimePoint now, CommandBuffer &cmds);
+  ViewModel build_view_model(TimePoint now);
 
-  sf::RenderWindow window_;
-  Settings settings_;
-  GameMode mode_;
+  sf::RenderWindow &window_;
+  const Settings &settings_;
+  std::unique_ptr<GameMode> mode_;
 
   Stats stats_;
-  TimerManager timers_;
-  std::vector<Event> pending_;
+  CommandBuffer cmds_;
 
   std::unique_ptr<Game> game_;
-  std::unique_ptr<IPlayer> player_;
+  std::vector<std::unique_ptr<IController>> controllers_;
   std::unique_ptr<Renderer> renderer_;
 
-  bool stats_dirty_ = false;
+  TimePoint next_stats_refresh_{};
 
+  // Multiplayer (partial)
   std::unique_ptr<Game> game2_;
-  std::unique_ptr<IPlayer> player2_;
+  std::vector<std::unique_ptr<IController>> controllers2_;
 };
