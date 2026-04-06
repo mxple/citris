@@ -12,6 +12,15 @@ public:
     return "Sprint " + std::to_string(target_lines_) + "L";
   }
 
+  // Tuning — fixed competitive defaults, not from settings.ini
+  std::chrono::milliseconds gravity_interval() const override {
+    return std::chrono::milliseconds{1000};
+  }
+  std::chrono::milliseconds lock_delay() const override {
+    return std::chrono::milliseconds{500};
+  }
+  int max_lock_resets() const override { return 15; }
+
   bool undo_allowed() const override { return false; }
 
   void on_start(TimePoint now) override { start_time_ = now; }
@@ -24,6 +33,12 @@ public:
 
   void fill_hud(HudData &hud, const GameState &state,
                 TimePoint now) override {
+    if (state.game_over && !end_time_)
+      end_time_ = now;
+    float elapsed_s =
+        std::chrono::duration<float>(end_time_.value_or(now) - start_time_)
+            .count();
+
     int remaining = std::max(0, target_lines_ - state.lines_cleared);
     hud.center_text = std::to_string(remaining);
     hud.center_color = sf::Color(200, 200, 200);
@@ -32,8 +47,6 @@ public:
       hud.game_over_label = "CLEAR!";
       hud.game_over_label_color = sf::Color(255, 255, 100);
 
-      float elapsed_s =
-          std::chrono::duration<float>(now - start_time_).count();
       int total_ms = static_cast<int>(elapsed_s * 1000);
       int mins = total_ms / 60000;
       int secs = (total_ms % 60000) / 1000;
@@ -49,4 +62,5 @@ public:
 private:
   int target_lines_;
   TimePoint start_time_;
+  std::optional<TimePoint> end_time_;
 };

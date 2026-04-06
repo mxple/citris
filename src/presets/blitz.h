@@ -13,6 +13,15 @@ public:
     return "Blitz " + std::to_string(limit_.count() / 60) + "min";
   }
 
+  // Tuning — fixed competitive defaults, not from settings.ini
+  std::chrono::milliseconds gravity_interval() const override {
+    return std::chrono::milliseconds{-1};
+  }
+  std::chrono::milliseconds lock_delay() const override {
+    return std::chrono::milliseconds{500};
+  }
+  int max_lock_resets() const override { return 15; }
+
   bool undo_allowed() const override { return false; }
 
   void on_start(TimePoint now) override { start_time_ = now; }
@@ -26,7 +35,11 @@ public:
 
   void fill_hud(HudData &hud, const GameState &state,
                 TimePoint now) override {
-    float elapsed = std::chrono::duration<float>(now - start_time_).count();
+    if (state.game_over && !end_time_)
+      end_time_ = now;
+    float elapsed =
+        std::chrono::duration<float>(end_time_.value_or(now) - start_time_)
+            .count();
     float remaining = static_cast<float>(limit_.count()) - elapsed;
     if (remaining < 0.f)
       remaining = 0.f;
@@ -56,4 +69,5 @@ public:
 private:
   std::chrono::seconds limit_;
   TimePoint start_time_;
+  std::optional<TimePoint> end_time_;
 };
