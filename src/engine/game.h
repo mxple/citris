@@ -105,7 +105,7 @@ private:
   bool game_over_ = false;
   bool won_ = false;
   bool dirty_ = true;
-  std::optional<Input> arr_direction_;
+  std::optional<GameInput> arr_direction_;
   bool soft_drop_active_ = false;
 
   TimePoint now_{};

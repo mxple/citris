@@ -1,17 +1,25 @@
 #pragma once
 
-#include "input.h"
 #include "notification.h"
-#include <optional>
-#include <variant>
-#include <vector>
+
+enum class GameInput {
+  Left,
+  Right,
+  RotateCW,
+  RotateCCW,
+  Rotate180,
+  SoftDrop,
+  HardDrop,
+  Hold
+};
+using Input = GameInput;
 
 namespace cmd {
 struct MovePiece {
-  Input input;
+  GameInput input;
 };
 struct SetARRDirection {
-  std::optional<Input> direction;
+  std::optional<GameInput> direction;
 };
 struct SetSoftDropActive {
   bool active;

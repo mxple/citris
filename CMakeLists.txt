@@ -33,6 +33,7 @@ file(GLOB LIB_SOURCES
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
+target_precompile_headers(tetris_lib PUBLIC src/pch.h)
 target_include_directories(tetris_lib PUBLIC
   src
   src/engine
