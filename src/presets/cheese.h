@@ -8,7 +8,7 @@
 
 class CheeseMode : public GameMode {
 public:
-  static constexpr int kTotalCheese = 20;
+  static constexpr int kTotalCheese = 100;
   static constexpr int kBoardFill = 10;
 
   CheeseMode() = default;

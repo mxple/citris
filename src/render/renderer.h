@@ -9,7 +9,7 @@ struct RenderLayout {
   static constexpr int kTileSize = 40;
   static constexpr int kBoardPadX = 6;
   static constexpr int kWindowTilesW = Board::kWidth + kBoardPadX * 2;
-  static constexpr int kWindowTilesH = Board::kVisibleHeight + 2;
+  static constexpr int kWindowTilesH = Board::kVisibleHeight + 3;
   static constexpr int kWindowW = kWindowTilesW * kTileSize;
   static constexpr int kWindowH = kWindowTilesH * kTileSize;
 
@@ -37,8 +37,8 @@ public:
 private:
   void render_board_scene(const GameState &state);
   void blit_and_present(const ViewModel &vm);
-  void draw_stats_text(const Stats::Snapshot &stats);
-  void draw_action_text(const GameState &state);
+  float draw_stats_text(const Stats::Snapshot &stats, float y);
+  float draw_action_text(const GameState &state, float y);
   void draw_hud(const HudData &hud, const GameState &state);
 
   void draw_board_border();

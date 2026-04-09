@@ -50,7 +50,7 @@ Renderer::Renderer(sf::RenderWindow &window, const Settings &settings)
       tex_verts_(sf::PrimitiveType::Triangles),
       solid_verts_(sf::PrimitiveType::Triangles), font_(get_font()) {
   board_x_ = L::kBoardPadX * L::kTileSize;
-  board_y_ = 1 * L::kTileSize;
+  board_y_ = 2 * L::kTileSize;
 
   if (!settings_.skin_path.empty()) {
     auto resolved = settings_.resolve(settings_.skin_path);
@@ -92,8 +92,9 @@ void Renderer::blit_and_present(const ViewModel &vm) {
   sf::Sprite board_sprite(board_tex_.getTexture());
   window_.draw(board_sprite);
 
-  draw_stats_text(vm.stats);
-  draw_action_text(last_state_);
+  float sidebar_y = board_y_ + L::kTileSize * 5.f;
+  sidebar_y = draw_stats_text(vm.stats, sidebar_y);
+  sidebar_y = draw_action_text(last_state_, sidebar_y);
 
   if (vm.hud)
     draw_hud(*vm.hud, vm.state);
@@ -128,14 +129,13 @@ void Renderer::render_board_scene(const GameState &state) {
   board_tex_.display();
 }
 
-void Renderer::draw_stats_text(const Stats::Snapshot &stats) {
+float Renderer::draw_stats_text(const Stats::Snapshot &stats, float y) {
   constexpr unsigned int kFontSize = 20;
   constexpr float kLineH = 22.f;
   const sf::Color kLabelColor(140, 140, 140);
   const sf::Color kValueColor(220, 220, 220);
 
   float x = 10.f;
-  float y = board_y_ + L::kTileSize * 5.f;
   float val_x = x + 60.f;
 
   auto draw_line = [&](const char *label, const std::string &value) {
@@ -182,11 +182,13 @@ void Renderer::draw_stats_text(const Stats::Snapshot &stats) {
   draw_line("KPS", fmt_rate(stats.inputs, stats.elapsed_s));
   draw_line("PPS", fmt_rate(stats.pieces, stats.elapsed_s));
   draw_line("APS", fmt_rate(stats.attack, stats.elapsed_s));
+
+  return y;
 }
 
-void Renderer::draw_action_text(const GameState &state) {
+float Renderer::draw_action_text(const GameState &state, float y) {
   if (displayed_clear_.lines == 0)
-    return;
+    return y;
 
   std::string label;
   switch (displayed_clear_.spin) {
@@ -209,20 +211,25 @@ void Renderer::draw_action_text(const GameState &state) {
   label += kLineNames[idx];
 
   constexpr unsigned int kFontSize = 20;
+  constexpr float kLineH = 22.f;
   float x = 10.f;
-  float y = board_y_ + L::kTileSize * 5.f + 22.f * 9.f;
+  y += kLineH * 0.5f;
 
   sf::Text text(font_, label, kFontSize);
   text.setFillColor(sf::Color(255, 255, 100));
   text.setPosition({x, y});
   window_.draw(text);
+  y += kLineH;
 
   if (displayed_clear_.perfect_clear) {
     sf::Text pc_text(font_, "perfect clear", kFontSize);
     pc_text.setFillColor(sf::Color(255, 200, 50));
-    pc_text.setPosition({x, y + 22.f});
+    pc_text.setPosition({x, y});
     window_.draw(pc_text);
+    y += kLineH;
   }
+
+  return y;
 }
 
 void Renderer::draw_hud(const HudData &hud, const GameState &state) {
