@@ -53,9 +53,10 @@ Renderer::Renderer(sf::RenderWindow &window, const Settings &settings)
   board_y_ = 1 * L::kTileSize;
 
   if (!settings_.skin_path.empty()) {
-    skin_ok_ = skin_.loadFromFile(settings_.skin_path);
+    auto resolved = settings_.resolve(settings_.skin_path);
+    skin_ok_ = skin_.loadFromFile(resolved);
     if (!skin_ok_)
-      std::cerr << "Failed to load skin: " << settings_.skin_path << "\n";
+      std::cerr << "Failed to load skin: " << resolved << "\n";
     skin_.setSmooth(false);
   }
 

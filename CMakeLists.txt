@@ -7,7 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
-find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
+if(WIN32)
+  find_package(SFML 3 COMPONENTS Graphics Window System Main REQUIRED)
+else()
+  find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
+endif()
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -16,7 +20,8 @@ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 add_custom_command(
   OUTPUT "${FONT_HEADER}"
   COMMAND xxd -i FreeMono.otf "${FONT_HEADER}"
-  COMMAND sed -i "s/^unsigned/inline unsigned/" "${FONT_HEADER}"
+  COMMAND ${CMAKE_COMMAND} -DFILE=${FONT_HEADER}
+    -P "${CMAKE_SOURCE_DIR}/cmake/inline_unsigned.cmake"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
   DEPENDS "${FONT_INPUT}"
   COMMENT "Embedding FreeMono.otf via xxd"
@@ -45,12 +50,15 @@ target_include_directories(tetris_lib PUBLIC
 target_link_libraries(tetris_lib PUBLIC SFML::Graphics SFML::Window SFML::System)
 add_dependencies(tetris_lib embed_font)
 
-# Main executable
-add_executable(citris src/main.cc)
+# Main executable — WIN32/MACOSX_BUNDLE suppress the console window
+add_executable(citris WIN32 MACOSX_BUNDLE src/main.cc)
 target_link_libraries(citris PRIVATE tetris_lib)
+if(WIN32)
+  target_link_libraries(citris PRIVATE SFML::Main)
+endif()
 
 # Install rules — exe + runtime data
-install(TARGETS citris RUNTIME DESTINATION .)
+install(TARGETS citris RUNTIME DESTINATION . BUNDLE DESTINATION .)
 install(DIRECTORY assets/ DESTINATION assets)
 install(FILES assets/default_settings.ini DESTINATION . RENAME settings.ini)
 

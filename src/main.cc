@@ -3,11 +3,17 @@
 #include "render/renderer.h"
 #include "settings.h"
 
+#include <filesystem>
+
 using L = RenderLayout;
 
-int main() {
+int main(int, char *argv[]) {
   Settings settings;
-  settings.load("settings.ini");
+  settings.base_dir =
+      std::filesystem::path(argv[0]).parent_path();
+  if (settings.base_dir.empty())
+    settings.base_dir = ".";
+  settings.load(settings.resolve("settings.ini"));
 
   auto window =
       sf::RenderWindow(sf::VideoMode({L::kWindowW, L::kWindowH}), "Citris");

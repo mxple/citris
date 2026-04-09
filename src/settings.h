@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Window/Keyboard.hpp>
 #include <chrono>
+#include <filesystem>
 #include <string>
 
 struct GameTuning {
@@ -13,6 +14,13 @@ struct GameTuning {
 };
 
 struct Settings {
+  // Base directory (derived from argv[0], for resolving relative paths)
+  std::filesystem::path base_dir = ".";
+
+  std::string resolve(const std::string &rel) const {
+    return (base_dir / rel).string();
+  }
+
   // Rendering
   std::string skin_path = "assets/skin.png";
   std::string font_path = "assets/FreeMono.otf";
