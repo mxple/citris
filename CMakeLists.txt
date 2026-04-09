@@ -91,6 +91,9 @@ if(WIN32)
     "${CMAKE_FIND_ROOT_PATH}/lib/libwinpthread-1.dll"
     "/usr/x86_64-w64-mingw32/lib/libstdc++-6.dll"
     "/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll"
+    "/usr/x86_64-w64-mingw32/bin/libstdc++-6.dll"
+    "/usr/x86_64-w64-mingw32/bin/libgcc_s_seh-1.dll"
+    "/usr/x86_64-w64-mingw32/bin/libwinpthread-1.dll"
     "/usr/lib/gcc/x86_64-w64-mingw32/*/libgcc_s_seh-1.dll"
     "/usr/lib/gcc/x86_64-w64-mingw32/*/libstdc++-6.dll")
   list(REMOVE_DUPLICATES _mingw_dlls)
