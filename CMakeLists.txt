@@ -57,6 +57,15 @@ if(WIN32)
   target_link_libraries(citris PRIVATE SFML::Main)
 endif()
 
+# Copy runtime data into build dir for local runs
+add_custom_command(TARGET citris POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E create_symlink
+    "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:citris>/assets"
+  COMMAND ${CMAKE_COMMAND} -E create_symlink
+    "${CMAKE_SOURCE_DIR}/settings.ini" "$<TARGET_FILE_DIR:citris>/settings.ini"
+  COMMENT "Symlinking assets/ and settings.ini into build dir"
+)
+
 # Install rules — exe + runtime data
 install(TARGETS citris RUNTIME DESTINATION . BUNDLE DESTINATION .)
 install(DIRECTORY assets/ DESTINATION assets)
@@ -68,7 +77,7 @@ if(WIN32)
   install(DIRECTORY "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/"
     DESTINATION . FILES_MATCHING PATTERN "*.dll")
 
-  # MinGW runtime DLLs — check compiler dir and sysroot bin
+  # MinGW runtime DLLs — search compiler dir, sysroot, and common cross-compile paths
   get_filename_component(_compiler_dir ${CMAKE_CXX_COMPILER} DIRECTORY)
   file(GLOB _mingw_dlls
     "${_compiler_dir}/libstdc++-6.dll"
@@ -77,9 +86,13 @@ if(WIN32)
     "${CMAKE_FIND_ROOT_PATH}/bin/libstdc++-6.dll"
     "${CMAKE_FIND_ROOT_PATH}/bin/libgcc_s_seh-1.dll"
     "${CMAKE_FIND_ROOT_PATH}/bin/libwinpthread-1.dll"
-    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libstdc++-6.dll"
-    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libgcc_s_seh-1.dll"
-    "/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin/libwinpthread-1.dll")
+    "${CMAKE_FIND_ROOT_PATH}/lib/libstdc++-6.dll"
+    "${CMAKE_FIND_ROOT_PATH}/lib/libgcc_s_seh-1.dll"
+    "${CMAKE_FIND_ROOT_PATH}/lib/libwinpthread-1.dll"
+    "/usr/x86_64-w64-mingw32/lib/libstdc++-6.dll"
+    "/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll"
+    "/usr/lib/gcc/x86_64-w64-mingw32/*/libgcc_s_seh-1.dll"
+    "/usr/lib/gcc/x86_64-w64-mingw32/*/libstdc++-6.dll")
   list(REMOVE_DUPLICATES _mingw_dlls)
   install(FILES ${_mingw_dlls} DESTINATION .)
 endif()
