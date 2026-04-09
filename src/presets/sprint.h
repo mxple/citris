@@ -23,7 +23,6 @@ public:
 
   bool undo_allowed() const override { return false; }
 
-  void on_start(TimePoint now) override { start_time_ = now; }
 
   void on_piece_locked(const eng::PieceLocked &, const GameState &state,
                        CommandBuffer &cmds) override {
@@ -61,6 +60,4 @@ public:
 
 private:
   int target_lines_;
-  TimePoint start_time_;
-  std::optional<TimePoint> end_time_;
 };

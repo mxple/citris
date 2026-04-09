@@ -24,7 +24,6 @@ public:
 
   bool undo_allowed() const override { return false; }
 
-  void on_start(TimePoint now) override { start_time_ = now; }
 
   void on_tick(TimePoint now, const GameState &,
                CommandBuffer &cmds) override {
@@ -68,6 +67,4 @@ public:
 
 private:
   std::chrono::seconds limit_;
-  TimePoint start_time_;
-  std::optional<TimePoint> end_time_;
 };

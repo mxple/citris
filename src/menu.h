@@ -18,9 +18,16 @@ private:
   enum class State { Main, PresetSelect };
 
   std::unique_ptr<GameMode> handle_key(sf::Keyboard::Key key);
+  std::unique_ptr<GameMode> handle_click(sf::Vector2f mouse);
+  std::unique_ptr<GameMode> activate_item(int index);
+  void update_hover(sf::Vector2f mouse);
   std::unique_ptr<GameMode> make_selected_mode();
   void draw();
   void draw_items(const std::vector<std::string> &items);
+
+  std::vector<std::string> current_items() const;
+  float logical_height() const;
+  void restore_game_view();
 
   sf::RenderWindow &window_;
   Settings &settings_;

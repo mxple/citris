@@ -45,6 +45,10 @@ struct Settings {
   // Game tuning (from [game] INI section, applied to freeplay)
   GameTuning game;
 
+  // Scaling
+  float scale_factor = 1.f;
+  bool auto_scale = true;
+
   // Ghost piece rendering
   bool colored_ghost = true;
   uint8_t ghost_opacity = 100;
@@ -53,4 +57,7 @@ struct Settings {
   uint8_t grid_opacity = 40;
 
   bool load(const std::string &path);
+  bool save(const std::string &path) const;
 };
+
+std::string key_to_string(sf::Keyboard::Key key);

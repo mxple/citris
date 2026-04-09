@@ -44,6 +44,9 @@ void GameManager::reset() {
 }
 
 void GameManager::run() {
+  auto sz = window_.getSize();
+  handle_resize(window_, sz.x, sz.y, settings_.auto_scale);
+
 run_start:
   std::vector<InputEvent> input_events;
 
@@ -76,7 +79,7 @@ run_start:
         window_.close();
         return;
       } else if (auto *wr = std::get_if<WindowResize>(&ev)) {
-        handle_resize(window_, wr->w, wr->h);
+        handle_resize(window_, wr->w, wr->h, settings_.auto_scale);
       }
 
       // keyboard events

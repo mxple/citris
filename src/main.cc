@@ -17,20 +17,21 @@ int main(int argc, char *argv[]) {
   // use the Windows API to get the executable path instead.
   wchar_t exe_buf[MAX_PATH];
   GetModuleFileNameW(nullptr, exe_buf, MAX_PATH);
-  settings.base_dir =
-      std::filesystem::path(exe_buf).parent_path();
+  settings.base_dir = std::filesystem::path(exe_buf).parent_path();
 #else
-  settings.base_dir =
-      std::filesystem::path(argv[0]).parent_path();
+  settings.base_dir = std::filesystem::path(argv[0]).parent_path();
 #endif
   if (settings.base_dir.empty())
     settings.base_dir = ".";
   settings.load(settings.resolve("settings.ini"));
 
-  auto window =
-      sf::RenderWindow(sf::VideoMode({L::kWindowW, L::kWindowH}), "Citris");
-
+  RenderLayout::init(settings.scale_factor);
+  unsigned init_w = static_cast<unsigned>(L::kWindowW);
+  unsigned init_h = static_cast<unsigned>(L::kWindowH);
+  auto window = sf::RenderWindow(sf::VideoMode({init_w, init_h}), "Citris");
   window.setKeyRepeatEnabled(false);
+
+  handle_resize(window, init_w, init_h, settings.auto_scale);
 
   while (true) {
     Menu menu(window, settings);

@@ -17,10 +17,6 @@ public:
 
   bool undo_allowed() const override { return false; }
 
-  void on_start(TimePoint now) override {
-    start_time_ = now;
-    end_time_.reset();
-  }
 
   void setup_board(Board &board) override {
     std::uniform_int_distribution<int> dist(0, Board::kWidth - 1);
@@ -93,7 +89,5 @@ private:
   }
 
   int cheese_reserve_ = kTotalCheese - kBoardFill;
-  TimePoint start_time_;
-  std::optional<TimePoint> end_time_;
   std::mt19937 rng_{std::random_device{}()};
 };

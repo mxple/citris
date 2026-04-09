@@ -31,6 +31,7 @@ file(GLOB LIB_SOURCES
   "src/controller/*.cc"
   "src/render/*.cc"
   "src/presets/*.cc"
+  "src/ui/*.cc"
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})

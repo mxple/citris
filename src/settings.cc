@@ -87,6 +87,19 @@ static const std::unordered_map<std::string, sf::Keyboard::Key> kKeyMap = {
     {"f12", sf::Keyboard::Key::F12},
 };
 
+static const std::unordered_map<sf::Keyboard::Key, std::string> kReverseKeyMap =
+    []() {
+      std::unordered_map<sf::Keyboard::Key, std::string> m;
+      for (auto &[name, key] : kKeyMap)
+        m[key] = name;
+      return m;
+    }();
+
+std::string key_to_string(sf::Keyboard::Key key) {
+  auto it = kReverseKeyMap.find(key);
+  return it != kReverseKeyMap.end() ? it->second : "unknown";
+}
+
 static std::string trim(const std::string &s) {
   auto start = s.find_first_not_of(" \t\r\n");
   if (start == std::string::npos)
@@ -188,7 +201,17 @@ bool Settings::load(const std::string &path) {
         if (ok)
           grid_opacity =
               static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
-      } else
+      } else if (key == "scale_factor") {
+        try {
+          float v = std::stof(trim(val));
+          scale_factor = std::clamp(v, 0.5f, 4.f);
+          ok = true;
+        } catch (...) {
+          ok = false;
+        }
+      } else if (key == "auto_scale")
+        ok = parse_bool(val, auto_scale);
+      else
         ok = false;
     } else if (section == "controls") {
       if (key == "move_left")
@@ -246,4 +269,53 @@ bool Settings::load(const std::string &path) {
                 << "' in [" << section << "]\n";
   }
   return true;
+}
+
+bool Settings::save(const std::string &path) const {
+  std::ofstream file(path);
+  if (!file.is_open())
+    return false;
+
+  auto ks = [](sf::Keyboard::Key k) { return key_to_string(k); };
+  auto opacity_pct = [](uint8_t v) { return v * 100 / 255; };
+
+  file << "[rendering]\n";
+  file << "skin = " << skin_path << "\n";
+  file << "colored_ghost = " << (colored_ghost ? "true" : "false") << "\n";
+  file << "ghost_opacity = " << opacity_pct(ghost_opacity) << "\n";
+  file << "grid_opacity = " << opacity_pct(grid_opacity) << "\n";
+  file << "scale_factor = " << scale_factor << "\n";
+  file << "auto_scale = " << (auto_scale ? "true" : "false") << "\n";
+  file << "\n";
+
+  file << "[controls]\n";
+  file << "move_left = " << ks(move_left) << "\n";
+  file << "move_right = " << ks(move_right) << "\n";
+  file << "rotate_cw = " << ks(rotate_cw) << "\n";
+  file << "rotate_ccw = " << ks(rotate_ccw) << "\n";
+  file << "rotate_180 = " << ks(rotate_180) << "\n";
+  file << "hard_drop = " << ks(hard_drop) << "\n";
+  file << "soft_drop = " << ks(soft_drop) << "\n";
+  file << "hold = " << ks(hold) << "\n";
+  file << "undo = " << ks(undo) << "\n";
+  file << "\n";
+
+  file << "[tuning]\n";
+  file << "das = " << das.count() << "\n";
+  file << "arr = " << arr.count() << "\n";
+  file << "soft_drop_interval = " << soft_drop_interval.count() << "\n";
+  file << "das_preserve_charge = " << (das_preserve_charge ? "true" : "false")
+       << "\n";
+  file << "\n";
+
+  file << "[game]\n";
+  file << "gravity_interval = " << game.gravity_interval.count() << "\n";
+  file << "lock_delay = " << game.lock_delay.count() << "\n";
+  file << "garbage_delay = " << game.garbage_delay.count() << "\n";
+  file << "max_lock_resets = " << game.max_lock_resets << "\n";
+  file << "infinite_hold = " << (game.infinite_hold ? "true" : "false")
+       << "\n";
+  file << "hard_drop_delay = " << game.hard_drop_delay.count() << "\n";
+
+  return file.good();
 }

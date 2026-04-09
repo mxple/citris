@@ -6,13 +6,44 @@
 #include <SFML/Graphics.hpp>
 
 struct RenderLayout {
-  static constexpr int kTileSize = 40;
-  static constexpr int kBoardPadX = 6;
+  // Base constants (compile-time, tile counts)
+  static constexpr int kBoardPadX = 5;
   static constexpr int kWindowTilesW = Board::kWidth + kBoardPadX * 2;
-  static constexpr int kWindowTilesH = Board::kVisibleHeight + 3;
-  static constexpr int kWindowW = kWindowTilesW * kTileSize;
-  static constexpr int kWindowH = kWindowTilesH * kTileSize;
+  static constexpr int kWindowTilesH = Board::kVisibleHeight + 4;
 
+  // Scaled values (set by init())
+  static inline float kTileSize = 40.f;
+  static inline float kWindowW = kWindowTilesW * 40.f;
+  static inline float kWindowH = kWindowTilesH * 40.f;
+  static inline float kScale = 1.f;
+
+  // Base (unscaled) text sizes — use in viewports that handle their own scaling
+  static constexpr unsigned kBaseFontS = 12;
+  static constexpr unsigned kBaseFontM = 18;
+  static constexpr unsigned kBaseFontL = 22;
+  static constexpr unsigned kBaseFontXL = 28;
+  static constexpr unsigned kBaseFontXXL = 48;
+
+  // Scaled text sizes (set by init())
+  static inline unsigned kFontS = kBaseFontS;
+  static inline unsigned kFontM = kBaseFontM;
+  static inline unsigned kFontL = kBaseFontL;
+  static inline unsigned kFontXL = kBaseFontXL;
+  static inline unsigned kFontXXL = kBaseFontXXL;
+
+  static void init(float scale) {
+    kScale = scale;
+    kTileSize = 40.f * scale;
+    kWindowW = kWindowTilesW * kTileSize;
+    kWindowH = kWindowTilesH * kTileSize;
+    kFontS = static_cast<unsigned>(kBaseFontS * scale);
+    kFontM = static_cast<unsigned>(kBaseFontM * scale);
+    kFontL = static_cast<unsigned>(kBaseFontL * scale);
+    kFontXL = static_cast<unsigned>(kBaseFontXL * scale);
+    kFontXXL = static_cast<unsigned>(kBaseFontXXL * scale);
+  }
+
+  // Skin texture coords — NOT scaled (pixel coords in skin.png)
   static constexpr int kSkinTile = 30;
   static constexpr int kSkinPitch = 31;
   static constexpr int kSkinTiles = 12;
@@ -73,4 +104,7 @@ private:
   GameState last_state_;
 };
 
-void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h);
+void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h,
+                   bool auto_scale = true);
+float handle_resize_fill_width(sf::RenderWindow &window, unsigned w,
+                               unsigned h, float scale_factor = 1.f);

@@ -66,7 +66,7 @@ Renderer::Renderer(sf::RenderWindow &window, const Settings &settings)
 }
 
 void Renderer::handle_resize(unsigned int width, unsigned int height) {
-  ::handle_resize(window_, width, height);
+  ::handle_resize(window_, width, height, settings_.auto_scale);
 }
 
 void Renderer::draw(const ViewModel &vm) {
@@ -130,21 +130,20 @@ void Renderer::render_board_scene(const GameState &state) {
 }
 
 float Renderer::draw_stats_text(const Stats::Snapshot &stats, float y) {
-  constexpr unsigned int kFontSize = 20;
-  constexpr float kLineH = 22.f;
+  const float kLineH = L::kFontL + 2.f;
   const sf::Color kLabelColor(140, 140, 140);
   const sf::Color kValueColor(220, 220, 220);
 
   float x = 10.f;
-  float val_x = x + 60.f;
+  float val_x = x + 60.f * L::kScale;
 
   auto draw_line = [&](const char *label, const std::string &value) {
-    sf::Text lbl(font_, label, kFontSize);
+    sf::Text lbl(font_, label, L::kFontL);
     lbl.setFillColor(kLabelColor);
     lbl.setPosition({x, y});
     window_.draw(lbl);
 
-    sf::Text val(font_, value, kFontSize);
+    sf::Text val(font_, value, L::kFontL);
     val.setFillColor(kValueColor);
     val.setPosition({val_x, y});
     window_.draw(val);
@@ -210,19 +209,18 @@ float Renderer::draw_action_text(const GameState &state, float y) {
   int idx = std::clamp(displayed_clear_.lines, 0, 4);
   label += kLineNames[idx];
 
-  constexpr unsigned int kFontSize = 20;
-  constexpr float kLineH = 22.f;
+  const float kLineH = L::kFontL + 2.f;
   float x = 10.f;
   y += kLineH * 0.5f;
 
-  sf::Text text(font_, label, kFontSize);
+  sf::Text text(font_, label, L::kFontL);
   text.setFillColor(sf::Color(255, 255, 100));
   text.setPosition({x, y});
   window_.draw(text);
   y += kLineH;
 
   if (displayed_clear_.perfect_clear) {
-    sf::Text pc_text(font_, "perfect clear", kFontSize);
+    sf::Text pc_text(font_, "perfect clear", L::kFontL);
     pc_text.setFillColor(sf::Color(255, 200, 50));
     pc_text.setPosition({x, y});
     window_.draw(pc_text);
@@ -236,7 +234,7 @@ void Renderer::draw_hud(const HudData &hud, const GameState &state) {
   float cx = board_x_ + 5.f * L::kTileSize;
 
   if (!hud.center_text.empty()) {
-    sf::Text text(font_, hud.center_text, 28);
+    sf::Text text(font_, hud.center_text, L::kFontXL);
     text.setFillColor(hud.center_color);
     auto bounds = text.getLocalBounds();
     float bottom = board_y_ + 20.f * L::kTileSize + 5.f;
@@ -247,14 +245,15 @@ void Renderer::draw_hud(const HudData &hud, const GameState &state) {
   if (state.game_over && !hud.game_over_label.empty()) {
     float cy = board_y_ + 10.f * L::kTileSize;
 
-    sf::Text label(font_, hud.game_over_label, 28);
+    sf::Text label(font_, hud.game_over_label, L::kFontXL);
     label.setFillColor(hud.game_over_label_color);
     auto lb = label.getLocalBounds();
-    label.setPosition({cx - lb.size.x / 2.f, cy - 50.f});
+    label.setPosition({cx - lb.size.x / 2.f, cy - 50.f * L::kScale});
     window_.draw(label);
 
     if (!hud.game_over_detail.empty()) {
-      sf::Text detail(font_, hud.game_over_detail, hud.game_over_detail_size);
+      sf::Text detail(font_, hud.game_over_detail,
+                       static_cast<unsigned>(hud.game_over_detail_size * L::kScale));
       detail.setFillColor(hud.game_over_detail_color);
       auto db = detail.getLocalBounds();
       detail.setPosition({cx - db.size.x / 2.f, cy});
@@ -407,14 +406,23 @@ void Renderer::push_solid(sf::Vector2f pos, sf::Vector2f size,
   solid_verts_.append(sf::Vertex{bl, color});
 }
 
-void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h) {
-  float logicalW = static_cast<float>(L::kWindowW);
-  float logicalH = static_cast<float>(L::kWindowH);
+void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h,
+                   bool auto_scale) {
+  std::cerr << "handle_resize" << std::endl;
+  float logicalW = L::kWindowW;
+  float logicalH = L::kWindowH;
   float windowW = static_cast<float>(w);
   float windowH = static_cast<float>(h);
-  float scale = std::min(windowW / logicalW, windowH / logicalH);
-  float viewportW = (logicalW * scale) / windowW;
-  float viewportH = (logicalH * scale) / windowH;
+
+  float viewportW, viewportH;
+  if (auto_scale) {
+    float fit = std::min(windowW / logicalW, windowH / logicalH);
+    viewportW = (logicalW * fit) / windowW;
+    viewportH = (logicalH * fit) / windowH;
+  } else {
+    viewportW = logicalW / windowW;
+    viewportH = logicalH / windowH;
+  }
   float viewportX = (1.f - viewportW) / 2.f;
   float viewportY = (1.f - viewportH) / 2.f;
 
@@ -423,4 +431,17 @@ void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h) {
   view.setCenter({logicalW / 2.f, logicalH / 2.f});
   view.setViewport({{viewportX, viewportY}, {viewportW, viewportH}});
   window.setView(view);
+}
+
+float handle_resize_fill_width(sf::RenderWindow &window, unsigned w,
+                               unsigned h, float scale_factor) {
+  std::cerr << "handle_resize_fill_w" << std::endl;
+  float logicalW = static_cast<float>(w) / scale_factor;
+  float logicalH = static_cast<float>(h) / scale_factor;
+  auto view = window.getView();
+  view.setSize({logicalW, logicalH});
+  view.setCenter({logicalW / 2.f, logicalH / 2.f});
+  view.setViewport({{0.f, 0.f}, {1.f, 1.f}});
+  window.setView(view);
+  return logicalH;
 }

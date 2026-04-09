@@ -34,7 +34,7 @@ public:
   virtual bool undo_allowed() const { return true; }
 
   // Lifecycle
-  virtual void on_start(TimePoint) {}
+  virtual void on_start(TimePoint now) { start_time_ = now; end_time_.reset(); }
   virtual void setup_board(Board &) {}
 
   // Event subscribers
@@ -44,4 +44,8 @@ public:
 
   // View model population
   virtual void fill_hud(HudData &, const GameState &, TimePoint) {}
+
+protected:
+  TimePoint start_time_;
+  std::optional<TimePoint> end_time_;
 };
