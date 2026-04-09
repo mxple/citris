@@ -78,7 +78,9 @@ endif()
 
 # CPack — produces a zip on Windows, tar.gz on Linux
 set(CPACK_PACKAGE_NAME "citris")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+if(NOT DEFINED CPACK_PACKAGE_VERSION)
+  set(CPACK_PACKAGE_VERSION "0.1.0")
+endif()
 if(WIN32)
   set(CPACK_GENERATOR "ZIP")
 else()
