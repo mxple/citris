@@ -7,11 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
-if(WIN32)
-  find_package(SFML 3 COMPONENTS Graphics Window System Main REQUIRED)
-else()
-  find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
-endif()
+find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -53,9 +49,6 @@ add_dependencies(tetris_lib embed_font)
 # Main executable — WIN32/MACOSX_BUNDLE suppress the console window
 add_executable(citris WIN32 MACOSX_BUNDLE src/main.cc)
 target_link_libraries(citris PRIVATE tetris_lib)
-if(WIN32)
-  target_link_libraries(citris PRIVATE SFML::Main)
-endif()
 
 # Copy runtime data into build dir for local runs
 add_custom_command(TARGET citris POST_BUILD

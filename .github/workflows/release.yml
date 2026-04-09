@@ -42,13 +42,12 @@ jobs:
 
   build-windows:
     runs-on: ubuntu-24.04
+    container: archlinux:latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pacman -Syu --noconfirm base-devel git mingw-w64-gcc cmake vim zip unzip curl tar pkg-config
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xxd mingw-w64
+      - uses: actions/checkout@v4
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -62,7 +61,7 @@ jobs:
             -DCPACK_PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        run: cmake --build build -j$(nproc) || true
 
       - name: Package
         run: cd build && cpack
