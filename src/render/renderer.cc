@@ -154,9 +154,9 @@ float Renderer::draw_stats_text(const Stats::Snapshot &stats, float y) {
 
   auto fmt_rate = [](int count, float secs) -> std::string {
     if (secs < 0.001f)
-      return "0.0";
+      return "0.00";
     char buf[16];
-    std::snprintf(buf, sizeof(buf), "%.1f", static_cast<float>(count) / secs);
+    std::snprintf(buf, sizeof(buf), "%.2f", static_cast<float>(count) / secs);
     return buf;
   };
 
@@ -164,9 +164,9 @@ float Renderer::draw_stats_text(const Stats::Snapshot &stats, float y) {
     int total_ms = static_cast<int>(secs * 1000);
     int mins = total_ms / 60000;
     int s = (total_ms % 60000) / 1000;
-    int tenths = (total_ms % 1000) / 100;
+    int hundredths = (total_ms % 1000) / 10;
     char buf[16];
-    std::snprintf(buf, sizeof(buf), "%d:%02d.%d", mins, s, tenths);
+    std::snprintf(buf, sizeof(buf), "%d:%02d.%02d", mins, s, hundredths);
     return buf;
   };
 
