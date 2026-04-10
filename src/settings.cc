@@ -4,98 +4,97 @@
 #include <iostream>
 #include <unordered_map>
 
-static const std::unordered_map<std::string, sf::Keyboard::Key> kKeyMap = {
-    {"a", sf::Keyboard::Key::A},
-    {"b", sf::Keyboard::Key::B},
-    {"c", sf::Keyboard::Key::C},
-    {"d", sf::Keyboard::Key::D},
-    {"e", sf::Keyboard::Key::E},
-    {"f", sf::Keyboard::Key::F},
-    {"g", sf::Keyboard::Key::G},
-    {"h", sf::Keyboard::Key::H},
-    {"i", sf::Keyboard::Key::I},
-    {"j", sf::Keyboard::Key::J},
-    {"k", sf::Keyboard::Key::K},
-    {"l", sf::Keyboard::Key::L},
-    {"m", sf::Keyboard::Key::M},
-    {"n", sf::Keyboard::Key::N},
-    {"o", sf::Keyboard::Key::O},
-    {"p", sf::Keyboard::Key::P},
-    {"q", sf::Keyboard::Key::Q},
-    {"r", sf::Keyboard::Key::R},
-    {"s", sf::Keyboard::Key::S},
-    {"t", sf::Keyboard::Key::T},
-    {"u", sf::Keyboard::Key::U},
-    {"v", sf::Keyboard::Key::V},
-    {"w", sf::Keyboard::Key::W},
-    {"x", sf::Keyboard::Key::X},
-    {"y", sf::Keyboard::Key::Y},
-    {"z", sf::Keyboard::Key::Z},
-    {"0", sf::Keyboard::Key::Num0},
-    {"1", sf::Keyboard::Key::Num1},
-    {"2", sf::Keyboard::Key::Num2},
-    {"3", sf::Keyboard::Key::Num3},
-    {"4", sf::Keyboard::Key::Num4},
-    {"5", sf::Keyboard::Key::Num5},
-    {"6", sf::Keyboard::Key::Num6},
-    {"7", sf::Keyboard::Key::Num7},
-    {"8", sf::Keyboard::Key::Num8},
-    {"9", sf::Keyboard::Key::Num9},
-    {"escape", sf::Keyboard::Key::Escape},
-    {"lcontrol", sf::Keyboard::Key::LControl},
-    {"lshift", sf::Keyboard::Key::LShift},
-    {"lalt", sf::Keyboard::Key::LAlt},
-    {"rcontrol", sf::Keyboard::Key::RControl},
-    {"rshift", sf::Keyboard::Key::RShift},
-    {"ralt", sf::Keyboard::Key::RAlt},
-    {"lbracket", sf::Keyboard::Key::LBracket},
-    {"rbracket", sf::Keyboard::Key::RBracket},
-    {"semicolon", sf::Keyboard::Key::Semicolon},
-    {"comma", sf::Keyboard::Key::Comma},
-    {"period", sf::Keyboard::Key::Period},
-    {"apostrophe", sf::Keyboard::Key::Apostrophe},
-    {"slash", sf::Keyboard::Key::Slash},
-    {"backslash", sf::Keyboard::Key::Backslash},
-    {"grave", sf::Keyboard::Key::Grave},
-    {"equal", sf::Keyboard::Key::Equal},
-    {"hyphen", sf::Keyboard::Key::Hyphen},
-    {"space", sf::Keyboard::Key::Space},
-    {"enter", sf::Keyboard::Key::Enter},
-    {"backspace", sf::Keyboard::Key::Backspace},
-    {"tab", sf::Keyboard::Key::Tab},
-    {"left", sf::Keyboard::Key::Left},
-    {"right", sf::Keyboard::Key::Right},
-    {"up", sf::Keyboard::Key::Up},
-    {"down", sf::Keyboard::Key::Down},
-    {"insert", sf::Keyboard::Key::Insert},
-    {"delete", sf::Keyboard::Key::Delete},
-    {"home", sf::Keyboard::Key::Home},
-    {"end", sf::Keyboard::Key::End},
-    {"pageup", sf::Keyboard::Key::PageUp},
-    {"pagedown", sf::Keyboard::Key::PageDown},
-    {"f1", sf::Keyboard::Key::F1},
-    {"f2", sf::Keyboard::Key::F2},
-    {"f3", sf::Keyboard::Key::F3},
-    {"f4", sf::Keyboard::Key::F4},
-    {"f5", sf::Keyboard::Key::F5},
-    {"f6", sf::Keyboard::Key::F6},
-    {"f7", sf::Keyboard::Key::F7},
-    {"f8", sf::Keyboard::Key::F8},
-    {"f9", sf::Keyboard::Key::F9},
-    {"f10", sf::Keyboard::Key::F10},
-    {"f11", sf::Keyboard::Key::F11},
-    {"f12", sf::Keyboard::Key::F12},
+static const std::unordered_map<std::string, KeyCode> kKeyMap = {
+    {"a", SDLK_A},
+    {"b", SDLK_B},
+    {"c", SDLK_C},
+    {"d", SDLK_D},
+    {"e", SDLK_E},
+    {"f", SDLK_F},
+    {"g", SDLK_G},
+    {"h", SDLK_H},
+    {"i", SDLK_I},
+    {"j", SDLK_J},
+    {"k", SDLK_K},
+    {"l", SDLK_L},
+    {"m", SDLK_M},
+    {"n", SDLK_N},
+    {"o", SDLK_O},
+    {"p", SDLK_P},
+    {"q", SDLK_Q},
+    {"r", SDLK_R},
+    {"s", SDLK_S},
+    {"t", SDLK_T},
+    {"u", SDLK_U},
+    {"v", SDLK_V},
+    {"w", SDLK_W},
+    {"x", SDLK_X},
+    {"y", SDLK_Y},
+    {"z", SDLK_Z},
+    {"0", SDLK_0},
+    {"1", SDLK_1},
+    {"2", SDLK_2},
+    {"3", SDLK_3},
+    {"4", SDLK_4},
+    {"5", SDLK_5},
+    {"6", SDLK_6},
+    {"7", SDLK_7},
+    {"8", SDLK_8},
+    {"9", SDLK_9},
+    {"escape", SDLK_ESCAPE},
+    {"lcontrol", SDLK_LCTRL},
+    {"lshift", SDLK_LSHIFT},
+    {"lalt", SDLK_LALT},
+    {"rcontrol", SDLK_RCTRL},
+    {"rshift", SDLK_RSHIFT},
+    {"ralt", SDLK_RALT},
+    {"lbracket", SDLK_LEFTBRACKET},
+    {"rbracket", SDLK_RIGHTBRACKET},
+    {"semicolon", SDLK_SEMICOLON},
+    {"comma", SDLK_COMMA},
+    {"period", SDLK_PERIOD},
+    {"apostrophe", SDLK_APOSTROPHE},
+    {"slash", SDLK_SLASH},
+    {"backslash", SDLK_BACKSLASH},
+    {"grave", SDLK_GRAVE},
+    {"equal", SDLK_EQUALS},
+    {"hyphen", SDLK_MINUS},
+    {"space", SDLK_SPACE},
+    {"enter", SDLK_RETURN},
+    {"backspace", SDLK_BACKSPACE},
+    {"tab", SDLK_TAB},
+    {"left", SDLK_LEFT},
+    {"right", SDLK_RIGHT},
+    {"up", SDLK_UP},
+    {"down", SDLK_DOWN},
+    {"insert", SDLK_INSERT},
+    {"delete", SDLK_DELETE},
+    {"home", SDLK_HOME},
+    {"end", SDLK_END},
+    {"pageup", SDLK_PAGEUP},
+    {"pagedown", SDLK_PAGEDOWN},
+    {"f1", SDLK_F1},
+    {"f2", SDLK_F2},
+    {"f3", SDLK_F3},
+    {"f4", SDLK_F4},
+    {"f5", SDLK_F5},
+    {"f6", SDLK_F6},
+    {"f7", SDLK_F7},
+    {"f8", SDLK_F8},
+    {"f9", SDLK_F9},
+    {"f10", SDLK_F10},
+    {"f11", SDLK_F11},
+    {"f12", SDLK_F12},
 };
 
-static const std::unordered_map<sf::Keyboard::Key, std::string> kReverseKeyMap =
-    []() {
-      std::unordered_map<sf::Keyboard::Key, std::string> m;
-      for (auto &[name, key] : kKeyMap)
-        m[key] = name;
-      return m;
-    }();
+static const std::unordered_map<KeyCode, std::string> kReverseKeyMap = []() {
+  std::unordered_map<KeyCode, std::string> m;
+  for (auto &[name, key] : kKeyMap)
+    m[key] = name;
+  return m;
+}();
 
-std::string key_to_string(sf::Keyboard::Key key) {
+std::string key_to_string(KeyCode key) {
   auto it = kReverseKeyMap.find(key);
   return it != kReverseKeyMap.end() ? it->second : "unknown";
 }
@@ -114,7 +113,7 @@ static std::string to_lower(std::string s) {
   return s;
 }
 
-static bool parse_key(const std::string &val, sf::Keyboard::Key &out) {
+static bool parse_key(const std::string &val, KeyCode &out) {
   auto it = kKeyMap.find(to_lower(trim(val)));
   if (it != kKeyMap.end()) {
     out = it->second;
@@ -276,7 +275,7 @@ bool Settings::save(const std::string &path) const {
   if (!file.is_open())
     return false;
 
-  auto ks = [](sf::Keyboard::Key k) { return key_to_string(k); };
+  auto ks = [](KeyCode k) { return key_to_string(k); };
   auto opacity_pct = [](uint8_t v) { return v * 100 / 255; };
 
   file << "[rendering]\n";

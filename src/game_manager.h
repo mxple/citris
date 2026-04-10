@@ -9,16 +9,16 @@
 #include "render/view_model.h"
 #include "settings.h"
 #include "stats.h"
-#include <SFML/Graphics/RenderWindow.hpp>
+#include <SDL3/SDL.h>
 #include <memory>
 #include <vector>
 
 class GameManager {
 public:
-  GameManager(sf::RenderWindow &window, const Settings &settings,
-              std::unique_ptr<GameMode> mode);
+  GameManager(SDL_Renderer *renderer, SDL_Window *window,
+              const Settings &settings, std::unique_ptr<GameMode> mode);
 
-  void run();
+  bool run();
 
 private:
   void reset();
@@ -26,16 +26,18 @@ private:
   void route_garbage(TimePoint now, CommandBuffer &cmds);
   ViewModel build_view_model(TimePoint now);
 
-  sf::RenderWindow &window_;
+  SDL_Renderer *renderer_;
+  SDL_Window *window_;
   const Settings &settings_;
   std::unique_ptr<GameMode> mode_;
+  bool running_ = true;
 
   Stats stats_;
   CommandBuffer cmds_;
 
   std::unique_ptr<Game> game_;
   std::vector<std::unique_ptr<IController>> controllers_;
-  std::unique_ptr<Renderer> renderer_;
+  std::unique_ptr<Renderer> renderer_obj_;
 
   TimePoint next_stats_refresh_{};
 

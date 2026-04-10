@@ -82,7 +82,7 @@ std::optional<TimePoint> PlayerController::next_deadline() const {
   return earliest;
 }
 
-void PlayerController::handle_key_down(sf::Keyboard::Key key, TimePoint now,
+void PlayerController::handle_key_down(KeyCode key, TimePoint now,
                                        CommandBuffer &cmds) {
   auto input = key_to_input(key);
   if (!input)
@@ -132,7 +132,7 @@ void PlayerController::handle_key_down(sf::Keyboard::Key key, TimePoint now,
   }
 }
 
-void PlayerController::handle_key_up(sf::Keyboard::Key key, TimePoint now,
+void PlayerController::handle_key_up(KeyCode key, TimePoint now,
                                      CommandBuffer &cmds) {
   auto input = key_to_input(key);
   if (!input)
@@ -225,7 +225,7 @@ void PlayerController::notify(const EngineEvent &ev, TimePoint now) {
 }
 
 std::optional<Input>
-PlayerController::key_to_input(sf::Keyboard::Key key) const {
+PlayerController::key_to_input(KeyCode key) const {
   auto it = key_map_.find(key);
   if (it != key_map_.end())
     return it->second;

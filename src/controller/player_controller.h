@@ -17,12 +17,10 @@ public:
   void notify(const EngineEvent &ev, TimePoint now) override;
 
 private:
-  std::optional<GameInput> key_to_input(sf::Keyboard::Key key) const;
+  std::optional<GameInput> key_to_input(KeyCode key) const;
 
-  void handle_key_down(sf::Keyboard::Key key, TimePoint now,
-                       CommandBuffer &cmds);
-  void handle_key_up(sf::Keyboard::Key key, TimePoint now,
-                     CommandBuffer &cmds);
+  void handle_key_down(KeyCode key, TimePoint now, CommandBuffer &cmds);
+  void handle_key_up(KeyCode key, TimePoint now, CommandBuffer &cmds);
 
   void start_arr_or_burst(GameInput dir, TimePoint now, CommandBuffer &cmds);
   void cancel_arr0(CommandBuffer &cmds);
@@ -34,7 +32,7 @@ private:
   }
 
   const Settings &settings_;
-  std::unordered_map<sf::Keyboard::Key, GameInput> key_map_;
+  std::unordered_map<KeyCode, GameInput> key_map_;
 
   // DAS/ARR state
   bool held_[2] = {};

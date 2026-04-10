@@ -53,14 +53,14 @@ public:
     std::snprintf(buf, sizeof(buf), "%d:%02d.%d", mins, secs, tenths);
 
     hud.center_text = buf;
-    hud.center_color = remaining < 30.f ? sf::Color(255, 100, 100)
-                                        : sf::Color(200, 200, 200);
+    hud.center_color = remaining < 30.f ? Color(255, 100, 100)
+                                        : Color(200, 200, 200);
 
     if (state.game_over) {
       hud.game_over_label = "TIME!";
-      hud.game_over_label_color = sf::Color(255, 255, 100);
+      hud.game_over_label_color = Color(255, 255, 100);
       hud.game_over_detail = std::to_string(state.total_attack) + " ATK";
-      hud.game_over_detail_color = sf::Color(100, 200, 255);
+      hud.game_over_detail_color = Color(100, 200, 255);
       hud.game_over_detail_size = 36;
     }
   }

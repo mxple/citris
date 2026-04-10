@@ -40,11 +40,11 @@ public:
 
     int remaining = std::max(0, target_lines_ - state.lines_cleared);
     hud.center_text = std::to_string(remaining);
-    hud.center_color = sf::Color(200, 200, 200);
+    hud.center_color = Color(200, 200, 200);
 
     if (state.game_over && state.won) {
       hud.game_over_label = "CLEAR!";
-      hud.game_over_label_color = sf::Color(255, 255, 100);
+      hud.game_over_label_color = Color(255, 255, 100);
 
       int total_ms = static_cast<int>(elapsed_s * 1000);
       int mins = total_ms / 60000;
@@ -53,7 +53,7 @@ public:
       char buf[32];
       std::snprintf(buf, sizeof(buf), "%d:%02d.%03d", mins, secs, ms);
       hud.game_over_detail = buf;
-      hud.game_over_detail_color = sf::Color(100, 255, 100);
+      hud.game_over_detail_color = Color(100, 255, 100);
       hud.game_over_detail_size = 36;
     }
   }

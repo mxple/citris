@@ -5,15 +5,17 @@
 
 static constexpr auto kStatsInterval = std::chrono::milliseconds(16);
 
-GameManager::GameManager(sf::RenderWindow &window, const Settings &settings,
+GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
+                         const Settings &settings,
                          std::unique_ptr<GameMode> mode)
-    : window_(window), settings_(settings), mode_(std::move(mode)) {
+    : renderer_(renderer), window_(window), settings_(settings),
+      mode_(std::move(mode)) {
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
   controllers_.push_back(std::make_unique<PlayerController>(settings_));
   controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_));
-  renderer_ = std::make_unique<Renderer>(window_, settings_);
+  renderer_obj_ = std::make_unique<Renderer>(renderer_, settings_);
 
   auto now = std::chrono::steady_clock::now();
   mode_->on_start(now);
@@ -43,56 +45,65 @@ void GameManager::reset() {
     stats_.process_event(ev, now);
 }
 
-void GameManager::run() {
-  auto sz = window_.getSize();
-  handle_resize(window_, sz.x, sz.y, settings_.auto_scale);
+bool GameManager::run() {
+  handle_resize(renderer_, settings_.auto_scale);
 
 run_start:
   std::vector<InputEvent> input_events;
 
-  auto wrap_sfml = [&](const sf::Event &sfml_ev) {
-    if (sfml_ev.is<sf::Event::Closed>())
+  auto wrap_sdl = [&](const SDL_Event &ev) {
+    switch (ev.type) {
+    case SDL_EVENT_QUIT:
       input_events.push_back(WindowClose{});
-    else if (auto *r = sfml_ev.getIf<sf::Event::Resized>())
-      input_events.push_back(WindowResize{r->size.x, r->size.y});
-    else if (auto *kp = sfml_ev.getIf<sf::Event::KeyPressed>())
-      input_events.push_back(KeyDown{kp->code});
-    else if (auto *kr = sfml_ev.getIf<sf::Event::KeyReleased>())
-      input_events.push_back(KeyUp{kr->code});
+      break;
+    case SDL_EVENT_WINDOW_RESIZED:
+      input_events.push_back(
+          WindowResize{static_cast<unsigned>(ev.window.data1),
+                       static_cast<unsigned>(ev.window.data2)});
+      break;
+    case SDL_EVENT_KEY_DOWN:
+      if (!ev.key.repeat)
+        input_events.push_back(KeyDown{ev.key.key});
+      break;
+    case SDL_EVENT_KEY_UP:
+      input_events.push_back(KeyUp{ev.key.key});
+      break;
+    }
   };
 
-  while (window_.isOpen()) {
+  while (running_) {
     auto now = std::chrono::steady_clock::now();
 
     // 1. Collect external input events
-    while (auto sfml_ev = window_.pollEvent())
-      wrap_sfml(*sfml_ev);
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev))
+      wrap_sdl(ev);
 
     // 2. Controller timers + input processing
     for (auto &ctrl : controllers_)
       ctrl->check_timers(now, cmds_);
 
     auto game_state = game_->state();
-    for (auto &ev : input_events) {
+    for (auto &iev : input_events) {
       // window events
-      if (std::holds_alternative<WindowClose>(ev)) {
-        window_.close();
-        return;
-      } else if (auto *wr = std::get_if<WindowResize>(&ev)) {
-        handle_resize(window_, wr->w, wr->h, settings_.auto_scale);
+      if (std::holds_alternative<WindowClose>(iev)) {
+        running_ = false;
+        return running_;
+      } else if (auto *wr = std::get_if<WindowResize>(&iev)) {
+        handle_resize(renderer_, settings_.auto_scale);
       }
 
       // keyboard events
-      if (auto *kd = std::get_if<KeyDown>(&ev)) {
-        if (kd->key == sf::Keyboard::Key::Backspace) {
-          return;
-        } else if (kd->key == sf::Keyboard::Key::Grave) {
+      if (auto *kd = std::get_if<KeyDown>(&iev)) {
+        if (kd->key == SDLK_BACKSPACE) {
+          return running_;
+        } else if (kd->key == SDLK_GRAVE) {
           reset();
           goto run_start;
         }
       }
       for (auto &ctrl : controllers_)
-        ctrl->update(ev, now, game_state, cmds_);
+        ctrl->update(iev, now, game_state, cmds_);
     }
     input_events.clear();
 
@@ -112,13 +123,6 @@ run_start:
       process_engine_events(now, discard);
     }
 
-    // Route garbage (multiplayer)
-    // if (game2_) {
-    //   CommandBuffer garbage_cmds;
-    //   route_garbage(now, garbage_cmds);
-    //   // Apply garbage to opponent engines...
-    // }
-
     // Render
     bool board_changed = game_->dirty();
     if (board_changed)
@@ -129,9 +133,9 @@ run_start:
       next_stats_refresh_ = now + kStatsInterval;
 
     if (board_changed) {
-      renderer_->draw(build_view_model(now));
+      renderer_obj_->draw(build_view_model(now));
     } else if (stats_due) {
-      renderer_->draw_stats(build_view_model(now));
+      renderer_obj_->draw_stats(build_view_model(now));
     }
 
     // Sleep until next deadline
@@ -148,16 +152,15 @@ run_start:
     if (wake) {
       now = std::chrono::steady_clock::now();
       auto remaining = *wake - now;
-      auto us =
-          std::chrono::duration_cast<std::chrono::microseconds>(remaining);
-      auto timeout = sf::microseconds(std::max(us.count(), int64_t{1}));
-      if (auto ev = window_.waitEvent(timeout))
-        wrap_sfml(*ev);
+      auto ms =
+          std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
+      int timeout_ms = std::max(static_cast<int>(ms.count()), 1);
+      SDL_WaitEventTimeout(NULL, timeout_ms);
     } else {
-      if (auto ev = window_.waitEvent())
-        wrap_sfml(*ev);
+      SDL_WaitEvent(NULL);
     }
   }
+  return running_;
 }
 
 void GameManager::process_engine_events(TimePoint now,

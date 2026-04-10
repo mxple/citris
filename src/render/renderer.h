@@ -1,9 +1,15 @@
 #pragma once
 
 #include "engine/game_state.h"
+#include "engine/piece.h"
+#include "sdl_types.h"
 #include "settings.h"
+#include "vec2.h"
 #include "view_model.h"
-#include <SFML/Graphics.hpp>
+#include <SDL3/SDL.h>
+#include <array>
+#include <cstdint>
+#include <vector>
 
 struct RenderLayout {
   // Base constants (compile-time, tile counts)
@@ -55,12 +61,13 @@ struct RenderLayout {
 
 class Renderer {
 public:
-  Renderer(sf::RenderWindow &window, const Settings &settings);
+  Renderer(SDL_Renderer *renderer, const Settings &settings);
+  ~Renderer();
 
   void draw(const ViewModel &vm);
   void draw_stats(const ViewModel &vm);
 
-  void handle_resize(unsigned int width, unsigned int height);
+  void handle_resize();
 
   static int cell_to_skin(CellColor cc);
   static int piece_to_skin(PieceType type);
@@ -81,30 +88,62 @@ private:
   void draw_preview(const std::array<PieceType, 6> &preview);
   void draw_game_over();
   void draw_mini_piece(PieceType type, float px, float py, int tile);
-  sf::Vector2f grid_to_pixel(int col, int row) const;
+  Vec2f grid_to_pixel(int col, int row) const;
 
-  void push_tile(sf::Vector2f pos, sf::Vector2f size, int tile_idx,
-                 sf::Color tint = sf::Color::White);
-  void push_solid(sf::Vector2f pos, sf::Vector2f size, sf::Color color);
+  void push_tile(Vec2f pos, Vec2f size, int tile_idx,
+                 Color tint = Color::White());
+  void push_solid(Vec2f pos, Vec2f size, Color color);
 
-  sf::RenderWindow &window_;
+  void draw_text(const char *str, unsigned font_size, float x, float y,
+                 Color color);
+  void draw_text_centered_x(const char *str, unsigned font_size, float cx,
+                             float y, Color color, float *out_w = nullptr);
+
+  // Dynamic text via glyph atlas. Vertices accumulate in text_verts_ /
+  // text_indices_ and are flushed once per present in blit_and_present.
+  void draw_text_atlas(const char *str, unsigned font_size, float x, float y,
+                       Color color);
+  void flush_text_batch();
+
+  void build_templates();
+
+  SDL_Renderer *renderer_;
   const Settings &settings_;
-  sf::Texture skin_;
+  SDL_Texture *skin_ = nullptr;
+  float skin_w_ = 0.f, skin_h_ = 0.f;
   bool skin_ok_ = false;
-  sf::VertexArray tex_verts_;
-  sf::VertexArray solid_verts_;
+
+  std::vector<SDL_Vertex> tex_verts_;
+  std::vector<uint16_t> tex_indices_;
+  std::vector<SDL_Vertex> solid_verts_;
+  std::vector<uint16_t> solid_indices_;
+  std::vector<SDL_Vertex> text_verts_;
+  std::vector<uint16_t> text_indices_;
+  const struct GlyphAtlas *current_text_atlas_ = nullptr;
+
+  // Pre-baked geometry templates, populated once in the constructor after
+  // the skin texture has been loaded. Each template stores 4 cells × 4
+  // verts in local (cell-offset) pixel coordinates with skin UVs baked in.
+  struct TileVert {
+    float lx, ly;
+    float u, v;
+  };
+  struct PieceTemplate {
+    TileVert verts[16];
+  };
+  std::array<std::array<PieceTemplate, 4>, 7> piece_tpl_full_;
+  std::array<PieceTemplate, 7> piece_tpl_mini_;
+  std::array<std::array<float, 4>, RenderLayout::kSkinTiles> skin_uv_;
+  bool templates_ok_ = false;
+
   float board_x_;
   float board_y_;
 
-  sf::RenderTexture board_tex_;
-  sf::Font &font_;
+  SDL_Texture *board_tex_ = nullptr;
 
   int last_drawn_piece_gen_ = -1;
   LastClear displayed_clear_;
   GameState last_state_;
 };
 
-void handle_resize(sf::RenderWindow &window, unsigned w, unsigned h,
-                   bool auto_scale = true);
-float handle_resize_fill_width(sf::RenderWindow &window, unsigned w,
-                               unsigned h, float scale_factor = 1.f);
+void handle_resize(SDL_Renderer *renderer, bool auto_scale = true);

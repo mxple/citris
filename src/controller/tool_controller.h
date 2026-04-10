@@ -24,6 +24,6 @@ public:
   void reset_input_state() override {}
 
 private:
-  sf::Keyboard::Key undo_key_;
+  KeyCode undo_key_;
   bool undo_allowed_;
 };

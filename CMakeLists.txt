@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
+
+# Disable vcpkg's applocal DLL copy (requires PowerShell); we bundle DLLs via install()
+set(VCPKG_APPLOCAL_DEPS OFF CACHE BOOL "")
+set(X_VCPKG_APPLOCAL_DEPS_INSTALL OFF CACHE BOOL "")
+
 project(citris LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -7,7 +12,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
-find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
+find_package(SDL3 REQUIRED)
+find_package(SDL3_ttf REQUIRED)
+find_package(SDL3_image REQUIRED)
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -44,7 +51,7 @@ target_include_directories(tetris_lib PUBLIC
   src/presets
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SFML::Graphics SFML::Window SFML::System)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_image::SDL3_image)
 add_dependencies(tetris_lib embed_font)
 
 # Main executable — WIN32/MACOSX_BUNDLE suppress the console window
@@ -67,7 +74,7 @@ install(FILES assets/default_settings.ini DESTINATION . RENAME settings.ini)
 
 # On Windows, bundle shared libs next to the exe
 if(WIN32)
-  # Collect SFML (and transitive) DLLs from vcpkg
+  # Collect SDL (and transitive) DLLs from vcpkg
   install(DIRECTORY "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/"
     DESTINATION . FILES_MATCHING PATTERN "*.dll")
 
@@ -113,4 +120,3 @@ foreach(test_src ${TEST_SOURCES})
   add_executable(${test_name} ${test_src})
   target_link_libraries(${test_name} PRIVATE tetris_lib)
 endforeach()
-

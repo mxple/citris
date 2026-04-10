@@ -60,7 +60,7 @@ public:
 
     if (state.game_over && state.won) {
       hud.game_over_label = "CLEAR!";
-      hud.game_over_label_color = sf::Color(255, 255, 100);
+      hud.game_over_label_color = Color(255, 255, 100);
 
       float elapsed_s =
           std::chrono::duration<float>(end_time_.value_or(now) - start_time_)
@@ -71,7 +71,7 @@ public:
       int ms = total_ms % 1000;
       std::snprintf(buf, sizeof(buf), "%d:%02d.%03d", mins, secs, ms);
       hud.game_over_detail = buf;
-      hud.game_over_detail_color = sf::Color(100, 255, 100);
+      hud.game_over_detail_color = Color(100, 255, 100);
       hud.game_over_detail_size = 36;
     }
   }

@@ -16,8 +16,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xxd libx11-dev libxrandr-dev libxcursor-dev \
-            libxi-dev libgl-dev libudev-dev libfreetype-dev
+          sudo apt-get install -y xxd libx11-dev libxft-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
+            libwayland-dev libegl-dev libgl-dev libgles-dev libibus-1.0-dev \
+            libudev-dev libdbus-1-dev libpulse-dev libasound2-dev libdecor-0-dev \
+            libfreetype-dev
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -61,7 +64,7 @@ jobs:
             -DCPACK_PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Build
-        run: cmake --build build -j$(nproc) || true
+        run: cmake --build build -j$(nproc)
 
       - name: Package
         run: cd build && cpack

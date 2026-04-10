@@ -1,13 +1,13 @@
 #pragma once
 
-#include <SFML/Window/Keyboard.hpp>
+#include "sdl_types.h"
 #include <variant>
 
 struct KeyDown {
-  sf::Keyboard::Key key;
+  KeyCode key;
 };
 struct KeyUp {
-  sf::Keyboard::Key key;
+  KeyCode key;
 };
 struct WindowClose {};
 struct WindowResize {

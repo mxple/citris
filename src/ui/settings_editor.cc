@@ -5,8 +5,9 @@
 
 using L = RenderLayout;
 
-SettingsEditor::SettingsEditor(sf::RenderWindow &window, Settings &settings)
-    : window_(window), settings_(settings), font_(get_font()) {
+SettingsEditor::SettingsEditor(SDL_Renderer *renderer, SDL_Window *window,
+                               Settings &settings)
+    : renderer_(renderer), window_(window), settings_(settings) {
   // Init adapter ints from settings
   das_ms_ = static_cast<int>(settings_.das.count());
   arr_ms_ = static_cast<int>(settings_.arr.count());
@@ -71,7 +72,8 @@ void SettingsEditor::build_widgets() {
   widgets_.push_back(std::make_unique<NumericInputWidget>(
       "Scale %", &scale_pct_, 50, 400));
   widgets_.push_back(std::make_unique<SkinPickerWidget>(
-      "Skin", &settings_.skin_path, skin_paths, settings_.base_dir.string()));
+      "Skin", &settings_.skin_path, skin_paths,
+      settings_.base_dir.string(), renderer_));
   widgets_.push_back(std::make_unique<BoolToggleWidget>(
       "Colored Ghost", &settings_.colored_ghost));
   widgets_.push_back(std::make_unique<NumericInputWidget>(
@@ -94,129 +96,173 @@ void SettingsEditor::build_widgets() {
   widgets_.push_back(std::make_unique<BoolToggleWidget>(
       "Infinite Hold", &settings_.game.infinite_hold));
 
-  // Layout all widgets
-  float y = 60.f;
-  float x = 40.f;
-  float w = window_.getView().getSize().x - 80.f;
+  // Layout all widgets — pixel-native logical presentation. Multiply
+  // layout constants by kScale so the UI scales with the user setting.
+  const float S = L::kScale;
+  float y = 60.f * S;
+  float x = 40.f * S;
+  float w = L::kWindowW - 80.f * S;
+
   for (auto &widget : widgets_) {
     y += widget->layout(x, y, w);
-    y += 4.f; // spacing
+    y += 4.f * S;
   }
-  content_height_ = y + 40.f;
+  content_height_ = y + 40.f * S;
 }
 
-float SettingsEditor::logical_height() const {
-  return window_.getView().getSize().y;
-}
+float SettingsEditor::logical_height() const { return L::kWindowH; }
 
 void SettingsEditor::run() {
-  auto sz = window_.getSize();
-  handle_resize_fill_width(window_, sz.x, sz.y, settings_.scale_factor);
+  handle_resize(renderer_, settings_.auto_scale);
   build_widgets();
 
-  while (window_.isOpen()) {
-    draw();
+  // Enable text input so NumericInputWidget can receive TEXT_INPUT events
+  SDL_StartTextInput(window_);
 
-    if (auto sfml_ev = window_.waitEvent()) {
-      if (sfml_ev->is<sf::Event::Closed>()) {
-        window_.close();
-        return;
-      }
+  auto mouse_logical = [&]() -> Vec2f {
+    float wx, wy;
+    SDL_GetMouseState(&wx, &wy);
+    float lx, ly;
+    SDL_RenderCoordinatesFromWindow(renderer_, wx, wy, &lx, &ly);
+    return {lx, ly - scroll_y_};
+  };
 
-      if (auto *r = sfml_ev->getIf<sf::Event::Resized>()) {
-        handle_resize_fill_width(window_, r->size.x, r->size.y,
-                                 settings_.scale_factor);
-        continue;
-      }
+  bool running = true;
+  while (running) {
+    if (dirty_) {
+      draw();
+      dirty_ = false;
+    }
 
-      if (auto *kp = sfml_ev->getIf<sf::Event::KeyPressed>()) {
-        if (kp->code == sf::Keyboard::Key::Escape) {
-          // Check no widget is listening/editing — if so, let it handle first
-          bool consumed = false;
-          auto mouse =
-              window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
-          mouse.y -= scroll_y_;
-          for (auto &w : widgets_) {
-            if (w->handle_event(*sfml_ev, mouse)) {
-              consumed = true;
-              break;
-            }
-          }
-          if (!consumed) {
-            save_settings();
-            return;
-          }
-          continue;
-        }
-      }
+    SDL_Event ev;
+    if (!SDL_WaitEvent(&ev))
+      continue;
 
-      // Mouse scroll
-      if (auto *scroll = sfml_ev->getIf<sf::Event::MouseWheelScrolled>()) {
-        scroll_y_ += scroll->delta * 30.f;
-        float max_scroll = 0.f;
-        float min_scroll = -(content_height_ - logical_height());
-        if (min_scroll > 0.f)
-          min_scroll = 0.f;
-        scroll_y_ = std::clamp(scroll_y_, min_scroll, max_scroll);
-        continue;
-      }
+    // Drain all queued events before the next redraw so hover/mouse
+    // state doesn't lag behind a backlog of motion events.
+    do {
+    switch (ev.type) {
+    case SDL_EVENT_QUIT:
+      SDL_StopTextInput(window_);
+      running = false;
+      return;
 
-      // Update hover on mouse move
-      if (sfml_ev->getIf<sf::Event::MouseMoved>()) {
-        auto mouse =
-            window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
-        mouse.y -= scroll_y_;
+    case SDL_EVENT_WINDOW_RESIZED:
+      handle_resize(renderer_, settings_.auto_scale);
+      dirty_ = true;
+      continue;
+
+    case SDL_EVENT_KEY_DOWN: {
+      Vec2f m = mouse_logical();
+      if (ev.key.key == SDLK_ESCAPE) {
+        // If a widget is listening/editing, let it handle first
+        bool consumed = false;
         for (auto &w : widgets_) {
-          w->set_hovered(w->bounds().contains(mouse));
+          if (w->handle_event(ev, m)) {
+            consumed = true;
+            break;
+          }
         }
+        if (!consumed) {
+          save_settings();
+          SDL_StopTextInput(window_);
+          return;
+        }
+        dirty_ = true;
         continue;
       }
-
-      // Deactivate all widgets before forwarding mouse clicks
-      if (sfml_ev->getIf<sf::Event::MouseButtonPressed>()) {
-        for (auto &w : widgets_)
-          w->deactivate();
-      }
-
-      // Forward to widgets
-      auto mouse =
-          window_.mapPixelToCoords(sf::Mouse::getPosition(window_));
-      mouse.y -= scroll_y_;
       for (auto &w : widgets_) {
-        if (w->handle_event(*sfml_ev, mouse))
+        if (w->handle_event(ev, m))
           break;
       }
+      dirty_ = true;
+      break;
     }
+
+    case SDL_EVENT_TEXT_INPUT: {
+      Vec2f m = mouse_logical();
+      for (auto &w : widgets_) {
+        if (w->handle_event(ev, m))
+          break;
+      }
+      dirty_ = true;
+      break;
+    }
+
+    case SDL_EVENT_MOUSE_WHEEL: {
+      scroll_y_ += ev.wheel.y * 30.f;
+      float max_scroll = 0.f;
+      float min_scroll = -(content_height_ - logical_height());
+      if (min_scroll > 0.f)
+        min_scroll = 0.f;
+      scroll_y_ = std::clamp(scroll_y_, min_scroll, max_scroll);
+      dirty_ = true;
+      continue;
+    }
+
+    case SDL_EVENT_MOUSE_MOTION: {
+      Vec2f m = mouse_logical();
+      int new_hover = -1;
+      for (int i = 0; i < static_cast<int>(widgets_.size()); ++i) {
+        if (widgets_[i]->contains(m)) {
+          new_hover = i;
+          break;
+        }
+      }
+      if (new_hover != hovered_idx_) {
+        hovered_idx_ = new_hover;
+        for (int i = 0; i < static_cast<int>(widgets_.size()); ++i)
+          widgets_[i]->set_hovered(i == hovered_idx_);
+        dirty_ = true;
+      }
+      continue;
+    }
+
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+      // Deactivate all widgets before forwarding clicks
+      for (auto &w : widgets_)
+        w->deactivate();
+
+      Vec2f m = mouse_logical();
+      for (auto &w : widgets_) {
+        if (w->handle_event(ev, m))
+          break;
+      }
+      dirty_ = true;
+      break;
+    }
+    }
+    } while (running && SDL_PollEvent(&ev));
   }
+
+  SDL_StopTextInput(window_);
 }
 
 void SettingsEditor::draw() {
-  window_.clear(sf::Color(20, 20, 20));
+  SDL_SetRenderDrawColor(renderer_, 20, 20, 20, 255);
+  SDL_RenderClear(renderer_);
 
-  // Use the current (fill) view as the base, apply scroll offset
-  sf::View base_view = window_.getView();
-  sf::View scrolled = base_view;
-  scrolled.move({0.f, -scroll_y_});
-  window_.setView(scrolled);
+  const float S = L::kScale;
 
-  // Title
-  sf::Text title(font_, "SETTINGS", L::kBaseFontXL);
-  title.setFillColor(sf::Color(200, 200, 200));
-  title.setPosition({40.f, 10.f});
-  window_.draw(title);
+  // Title (fixed, not scrolled)
+  if (const CachedText *t =
+          get_text(renderer_, "SETTINGS", L::kFontXL, Color(200, 200, 200))) {
+    SDL_FRect dst = {40.f * S, 10.f * S + scroll_y_, t->w, t->h};
+    SDL_RenderTexture(renderer_, t->tex, nullptr, &dst);
+  }
 
-  // Draw widgets
+  // Draw widgets (with scroll offset)
   for (auto &w : widgets_)
-    w->draw(window_);
+    w->draw(renderer_, scroll_y_);
 
-  // Hint at bottom (fixed position, not scrolled)
-  window_.setView(base_view);
-  sf::Text hint(font_, "ESC to save & return", L::kBaseFontS);
-  hint.setFillColor(sf::Color(120, 120, 120));
-  hint.setPosition({40.f, logical_height() - 25.f});
-  window_.draw(hint);
+  // Hint at bottom (fixed position)
+  if (const CachedText *t = get_text(renderer_, "ESC to save & return",
+                                     L::kFontS, Color(120, 120, 120))) {
+    SDL_FRect dst = {40.f * S, logical_height() - 25.f * S, t->w, t->h};
+    SDL_RenderTexture(renderer_, t->tex, nullptr, &dst);
+  }
 
-  window_.display();
+  SDL_RenderPresent(renderer_);
 }
 
 void SettingsEditor::save_settings() {
@@ -237,4 +283,16 @@ void SettingsEditor::save_settings() {
       std::clamp(static_cast<float>(scale_pct_) / 100.f, 0.5f, 4.f);
 
   settings_.save("settings.ini");
+
+  // Apply scale changes immediately so the caller sees an updated window.
+  L::init(settings_.scale_factor);
+  if (!settings_.auto_scale) {
+    SDL_SetWindowSize(window_, static_cast<int>(L::kWindowW),
+                      static_cast<int>(L::kWindowH));
+    // Wayland applies size changes asynchronously; block until the
+    // compositor confirms so the caller's subsequent logical
+    // presentation matches the real window size.
+    SDL_SyncWindow(window_);
+  }
+  handle_resize(renderer_, settings_.auto_scale);
 }

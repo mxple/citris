@@ -2,13 +2,14 @@
 
 #include "settings.h"
 #include "ui/widget.h"
-#include <SFML/Graphics.hpp>
+#include <SDL3/SDL.h>
 #include <memory>
 #include <vector>
 
 class SettingsEditor {
 public:
-  SettingsEditor(sf::RenderWindow &window, Settings &settings);
+  SettingsEditor(SDL_Renderer *renderer, SDL_Window *window,
+                 Settings &settings);
 
   void run();
 
@@ -18,13 +19,15 @@ private:
   void save_settings();
   float logical_height() const;
 
-  sf::RenderWindow &window_;
+  SDL_Renderer *renderer_;
+  SDL_Window *window_;
   Settings &settings_;
-  sf::Font &font_;
 
   std::vector<std::unique_ptr<Widget>> widgets_;
   float scroll_y_ = 0.f;
   float content_height_ = 0.f;
+  bool dirty_ = true;
+  int hovered_idx_ = -1;
 
   // Adapter ints for chrono::ms fields
   int das_ms_, arr_ms_, soft_drop_ms_;

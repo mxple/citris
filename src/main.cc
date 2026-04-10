@@ -1,8 +1,11 @@
 #include "game_manager.h"
-#include "menu.h"
+#include "ui/menu.h"
+#include "render/font.h"
 #include "render/renderer.h"
 #include "settings.h"
 
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <filesystem>
 #ifdef _WIN32
 #include <windows.h>
@@ -13,8 +16,6 @@ using L = RenderLayout;
 int main(int argc, char *argv[]) {
   Settings settings;
 #ifdef _WIN32
-  // WIN32 subsystem + SFML::Main may pass an unreliable argv[0];
-  // use the Windows API to get the executable path instead.
   wchar_t exe_buf[MAX_PATH];
   GetModuleFileNameW(nullptr, exe_buf, MAX_PATH);
   settings.base_dir = std::filesystem::path(exe_buf).parent_path();
@@ -25,22 +26,33 @@ int main(int argc, char *argv[]) {
     settings.base_dir = ".";
   settings.load(settings.resolve("settings.ini"));
 
-  RenderLayout::init(settings.scale_factor);
-  unsigned init_w = static_cast<unsigned>(L::kWindowW);
-  unsigned init_h = static_cast<unsigned>(L::kWindowH);
-  auto window = sf::RenderWindow(sf::VideoMode({init_w, init_h}), "Citris");
-  window.setKeyRepeatEnabled(false);
+  SDL_Init(SDL_INIT_VIDEO);
+  TTF_Init();
 
-  handle_resize(window, init_w, init_h, settings.auto_scale);
+  RenderLayout::init(settings.scale_factor);
+
+  SDL_Window *window = SDL_CreateWindow(
+      "Citris", static_cast<int>(L::kWindowW), static_cast<int>(L::kWindowH),
+      SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+  SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
+  SDL_SetRenderVSync(renderer, 1);
+
+  handle_resize(renderer, settings.auto_scale);
 
   while (true) {
-    Menu menu(window, settings);
+    Menu menu(renderer, window, settings);
     auto mode = menu.run();
     if (!mode)
       break;
-    GameManager gm(window, settings, std::move(mode));
-    gm.run();
+    GameManager gm(renderer, window, settings, std::move(mode));
+    if (gm.run()) break;
   }
+
+  shutdown_fonts();
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  TTF_Quit();
+  SDL_Quit();
 
   return 0;
 }

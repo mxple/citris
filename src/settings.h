@@ -1,5 +1,5 @@
 #pragma once
-#include <SFML/Window/Keyboard.hpp>
+#include "sdl_types.h"
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -26,15 +26,15 @@ struct Settings {
   std::string font_path = "assets/FreeMono.otf";
 
   // Controls
-  sf::Keyboard::Key move_left = sf::Keyboard::Key::Left;
-  sf::Keyboard::Key move_right = sf::Keyboard::Key::Right;
-  sf::Keyboard::Key rotate_cw = sf::Keyboard::Key::Up;
-  sf::Keyboard::Key rotate_ccw = sf::Keyboard::Key::Z;
-  sf::Keyboard::Key rotate_180 = sf::Keyboard::Key::A;
-  sf::Keyboard::Key hard_drop = sf::Keyboard::Key::Space;
-  sf::Keyboard::Key soft_drop = sf::Keyboard::Key::Down;
-  sf::Keyboard::Key hold = sf::Keyboard::Key::C;
-  sf::Keyboard::Key undo = sf::Keyboard::Key::U;
+  KeyCode move_left = SDLK_LEFT;
+  KeyCode move_right = SDLK_RIGHT;
+  KeyCode rotate_cw = SDLK_UP;
+  KeyCode rotate_ccw = SDLK_Z;
+  KeyCode rotate_180 = SDLK_A;
+  KeyCode hard_drop = SDLK_SPACE;
+  KeyCode soft_drop = SDLK_DOWN;
+  KeyCode hold = SDLK_C;
+  KeyCode undo = SDLK_U;
 
   // Input tuning
   std::chrono::milliseconds das{110};
@@ -60,4 +60,4 @@ struct Settings {
   bool save(const std::string &path) const;
 };
 
-std::string key_to_string(sf::Keyboard::Key key);
+std::string key_to_string(KeyCode key);
