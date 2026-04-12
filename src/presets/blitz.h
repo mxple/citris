@@ -13,7 +13,6 @@ public:
     return "Blitz " + std::to_string(limit_.count() / 60) + "min";
   }
 
-  // Tuning — fixed competitive defaults, not from settings.ini
   std::chrono::milliseconds gravity_interval() const override {
     return std::chrono::milliseconds{1000};
   }
