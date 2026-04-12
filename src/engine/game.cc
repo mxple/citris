@@ -48,8 +48,9 @@ void Game::tick(TimePoint now) {
   now_ = now;
 
   if (gravity_deadline_ && now_ >= *gravity_deadline_) {
+    TimePoint expired = *gravity_deadline_;
     gravity_deadline_.reset();
-    handle_gravity();
+    handle_gravity(expired);
   }
   if (lock_delay_deadline_ && now_ >= *lock_delay_deadline_) {
     lock_delay_deadline_.reset();
@@ -183,7 +184,7 @@ void Game::handle_move(const cmd::MovePiece &e) {
   }
 }
 
-void Game::handle_gravity() {
+void Game::handle_gravity(TimePoint expired_at) {
   if (drop1()) {
     dirty_ = true;
     last_move_was_rotation_ = false;
@@ -191,7 +192,7 @@ void Game::handle_gravity() {
     if (is_grounded()) {
       arm_lock_delay();
     } else {
-      arm_gravity();
+      arm_gravity(expired_at);
     }
   } else {
     arm_lock_delay();
@@ -390,14 +391,14 @@ void Game::post_move_timers() {
   }
 }
 
-void Game::arm_gravity() {
+void Game::arm_gravity(std::optional<TimePoint> chain_from) {
   if (mode_.gravity_interval() < std::chrono::milliseconds{0})
     return;
   if (mode_.gravity_interval() == std::chrono::milliseconds{0}) {
     apply_20g();
     return;
   }
-  gravity_deadline_ = now_ + mode_.gravity_interval();
+  gravity_deadline_ = chain_from.value_or(now_) + mode_.gravity_interval();
 }
 
 void Game::arm_lock_delay() {

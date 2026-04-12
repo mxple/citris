@@ -30,6 +30,7 @@ void PlayerController::check_timers(TimePoint now, CommandBuffer &cmds) {
   // DAS timers
   for (int i = 0; i < 2; ++i) {
     if (das_deadline_[i] && now >= *das_deadline_[i]) {
+      TimePoint expired = *das_deadline_[i];
       das_deadline_[i].reset();
       Input dir = (i == 0) ? Input::Left : Input::Right;
       if (!held_[i])
@@ -37,30 +38,32 @@ void PlayerController::check_timers(TimePoint now, CommandBuffer &cmds) {
       das_charged_[i] = true;
       if (active_direction_ != dir)
         continue;
-      start_arr_or_burst(dir, now, cmds);
+      start_arr_or_burst(dir, expired, cmds);
     }
   }
 
   // ARR timers
   for (int i = 0; i < 2; ++i) {
     if (arr_deadline_[i] && now >= *arr_deadline_[i]) {
+      TimePoint expired = *arr_deadline_[i];
       arr_deadline_[i].reset();
       Input dir = (i == 0) ? Input::Left : Input::Right;
       if (active_direction_ != dir)
         continue;
       cmds.push(cmd::MovePiece{dir});
-      arr_deadline_[i] = now + settings_.arr;
+      arr_deadline_[i] = expired + settings_.arr;
     }
   }
 
   // Soft drop timer
   if (soft_drop_deadline_ && now >= *soft_drop_deadline_) {
+    TimePoint expired = *soft_drop_deadline_;
     soft_drop_deadline_.reset();
     if (!soft_drop_held_)
       return;
     cmds.push(cmd::MovePiece{Input::SoftDrop});
     if (settings_.soft_drop_interval > std::chrono::milliseconds{0}) {
-      soft_drop_deadline_ = now + settings_.soft_drop_interval;
+      soft_drop_deadline_ = expired + settings_.soft_drop_interval;
     } else {
       for (int i = 0; i < Board::kTotalHeight; ++i)
         cmds.push(cmd::MovePiece{Input::SoftDrop});

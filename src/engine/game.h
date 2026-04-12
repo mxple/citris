@@ -32,7 +32,7 @@ public:
 
 private:
   void handle_move(const cmd::MovePiece &e);
-  void handle_gravity();
+  void handle_gravity(TimePoint expired_at);
   void handle_lock_delay_expired();
   void handle_garbage_received(int lines, int gap_col, bool immediate);
   void handle_garbage_delay_expired();
@@ -49,7 +49,7 @@ private:
   bool is_grounded() const;
   void post_move_timers();
 
-  void arm_gravity();
+  void arm_gravity(std::optional<TimePoint> chain_from = {});
   void apply_20g();
   void arm_lock_delay();
   bool apply_arr0();
