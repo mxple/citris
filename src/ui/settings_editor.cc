@@ -2,9 +2,11 @@
 
 #include <imgui.h>
 #include <SDL3_image/SDL_image.h>
-#include <filesystem>
 #include <algorithm>
 #include <cstdio>
+#ifndef __EMSCRIPTEN__
+#include <filesystem>
+#endif
 
 SettingsEditor::SettingsEditor(SDL_Renderer *renderer, SDL_Window *window,
                                 Settings &settings)
@@ -55,15 +57,32 @@ void SettingsEditor::sync_from_settings() {
 
 void SettingsEditor::discover_skins() {
   skin_paths_.clear();
+#ifdef __EMSCRIPTEN__
+  for (int i = 1; i <= 20; ++i) {
+    auto path = path_join(settings_.base_dir, "assets/skin" + std::to_string(i) + ".png");
+    if (FILE *f = fopen(path.c_str(), "r")) {
+      fclose(f);
+      skin_paths_.push_back(path);
+    }
+  }
+  for (auto *name : {"skin_checker.png", "skin.png"}) {
+    auto path = path_join(settings_.base_dir, std::string("assets/") + name);
+    if (FILE *f = fopen(path.c_str(), "r")) {
+      fclose(f);
+      skin_paths_.push_back(path);
+    }
+  }
+#else
   try {
-    for (auto &entry :
-         std::filesystem::directory_iterator(settings_.base_dir / "assets")) {
+    auto assets_dir = std::filesystem::path(path_join(settings_.base_dir, "assets"));
+    for (auto &entry : std::filesystem::directory_iterator(assets_dir)) {
       auto name = entry.path().filename().string();
       if (name.starts_with("skin") && name.ends_with(".png"))
         skin_paths_.push_back(entry.path().string());
     }
   } catch (...) {
   }
+#endif
   std::sort(skin_paths_.begin(), skin_paths_.end());
   skin_index_ = 0;
   for (int i = 0; i < (int)skin_paths_.size(); ++i)
@@ -76,6 +95,22 @@ struct Binding {
   const char *label;
   KeyCode *target;
 };
+
+// ImGui and SDL use different names for some keys. Map ImGuiKey directly to
+// SDL_Keycode for keys where SDL_GetKeyFromName(ImGui::GetKeyName()) fails.
+SDL_Keycode imgui_key_to_sdl(ImGuiKey k) {
+  switch (k) {
+  case ImGuiKey_LeftShift:    return SDLK_LSHIFT;
+  case ImGuiKey_RightShift:   return SDLK_RSHIFT;
+  case ImGuiKey_LeftCtrl:     return SDLK_LCTRL;
+  case ImGuiKey_RightCtrl:    return SDLK_RCTRL;
+  case ImGuiKey_LeftAlt:      return SDLK_LALT;
+  case ImGuiKey_RightAlt:     return SDLK_RALT;
+  case ImGuiKey_LeftSuper:    return SDLK_LGUI;
+  case ImGuiKey_RightSuper:   return SDLK_RGUI;
+  default:                    return SDLK_UNKNOWN;
+  }
+}
 }
 
 void SettingsEditor::draw() {
@@ -104,13 +139,16 @@ void SettingsEditor::draw() {
         if (k == ImGuiKey_Escape)
           continue;
         if (ImGui::IsKeyPressed((ImGuiKey)k, false)) {
-          // Map ImGuiKey back to SDL_Keycode via the key name.
-          const char *name = ImGui::GetKeyName((ImGuiKey)k);
-          if (name && name[0]) {
-            SDL_Keycode kc = SDL_GetKeyFromName(name);
-            if (kc != SDLK_UNKNOWN)
-              *bindings[capturing_].target = kc;
+          // Map ImGuiKey back to SDL_Keycode — try direct table first,
+          // then fall back to string name lookup.
+          SDL_Keycode kc = imgui_key_to_sdl((ImGuiKey)k);
+          if (kc == SDLK_UNKNOWN) {
+            const char *name = ImGui::GetKeyName((ImGuiKey)k);
+            if (name && name[0])
+              kc = SDL_GetKeyFromName(name);
           }
+          if (kc != SDLK_UNKNOWN)
+            *bindings[capturing_].target = kc;
           capturing_ = -1;
           break;
         }
@@ -162,10 +200,9 @@ void SettingsEditor::draw() {
   for (int i = 0; i < kBindingCount; ++i) {
     row_begin(bindings[i].label);
     ImGui::PushID(i);
-    const char *btn_label =
-        capturing_ == i ? "[press a key]" : key_to_string(*bindings[i].target).c_str();
+    std::string key_label = capturing_ == i ? "[press a key]" : key_to_string(*bindings[i].target);
     char buf[64];
-    std::snprintf(buf, sizeof(buf), "%s##kb", btn_label);
+    std::snprintf(buf, sizeof(buf), "%s##kb", key_label.c_str());
     if (ImGui::Button(buf, ImVec2(kWidgetW, 0)))
       capturing_ = i;
     ImGui::PopID();

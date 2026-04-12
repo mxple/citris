@@ -6,6 +6,10 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 Menu::Menu(SDL_Renderer *renderer, SDL_Window *window, Settings &settings)
     : renderer_(renderer), window_(window), settings_(settings) {
   modes_ = all_modes();
@@ -112,6 +116,10 @@ std::unique_ptr<GameMode> Menu::run() {
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer_);
     SDL_RenderPresent(renderer_);
+
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(0);
+#endif
 
     if (back_to_main) {
       screen_ = Screen::Main;

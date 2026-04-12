@@ -4,6 +4,10 @@
 
 #include <SDL3/SDL.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
@@ -112,7 +116,9 @@ int main(int argc, char *argv[]) {
       "Citris", kInitialWindowW, kInitialWindowH,
       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
   SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
+#ifndef __EMSCRIPTEN__
   SDL_SetRenderVSync(renderer, 1);
+#endif
 
   // Query DPI scale from the ratio of pixel size to logical window size.
   // With HIGH_PIXEL_DENSITY, on a 2x HiDPI display this will be 2.0.
@@ -154,6 +160,9 @@ int main(int argc, char *argv[]) {
     GameManager gm(renderer, window, settings, std::move(mode));
     if (!gm.run())
       break;
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(0);
+#endif
   }
 
   ImGui_ImplSDLRenderer3_Shutdown();

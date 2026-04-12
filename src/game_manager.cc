@@ -9,6 +9,10 @@
 
 #include <chrono>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
                          const Settings &settings,
                          std::unique_ptr<GameMode> mode)
@@ -136,6 +140,9 @@ run_start:
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer_);
     SDL_RenderPresent(renderer_);
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(0);
+#endif
   }
   return running_;
 }

@@ -1,8 +1,13 @@
 #pragma once
 #include "sdl_types.h"
 #include <chrono>
-#include <filesystem>
 #include <string>
+
+inline std::string path_join(const std::string &a, const std::string &b) {
+  if (a.empty() || a == ".") return b;
+  if (a.back() == '/' || a.back() == '\\') return a + b;
+  return a + "/" + b;
+}
 
 struct GameTuning {
   std::chrono::milliseconds gravity_interval{10000};
@@ -19,7 +24,7 @@ struct Settings {
   explicit Settings(const char *argv0);
 
   // Base directory (derived from argv[0], for resolving relative paths)
-  std::filesystem::path base_dir = ".";
+  std::string base_dir = ".";
 
   // Rendering (paths below are resolved to absolute form in the ctor)
   std::string skin_path = "assets/skin.png";

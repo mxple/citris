@@ -4,25 +4,35 @@
 #include <iostream>
 #include <unordered_map>
 
-#ifdef _WIN32
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#elif defined(_WIN32)
 #include <windows.h>
+#else
+#include <filesystem>
 #endif
 
 Settings::Settings(const char *argv0) {
-#ifdef _WIN32
+#ifdef __EMSCRIPTEN__
+  (void)argv0;
+  base_dir = ".";
+  EM_ASM({
+    var saved = localStorage.getItem('citris_settings');
+    if (saved) FS.writeFile('/settings.ini', saved);
+  });
+#elif defined(_WIN32)
   (void)argv0;
   wchar_t exe_buf[MAX_PATH];
   GetModuleFileNameW(nullptr, exe_buf, MAX_PATH);
-  base_dir = std::filesystem::path(exe_buf).parent_path();
+  base_dir = std::filesystem::path(exe_buf).parent_path().string();
 #else
-  base_dir = std::filesystem::path(argv0).parent_path();
+  base_dir = std::filesystem::path(argv0).parent_path().string();
 #endif
   if (base_dir.empty())
     base_dir = ".";
-  load((base_dir / "settings.ini").string());
-  // Resolve asset paths (possibly updated by load()) to absolute form.
-  skin_path = (base_dir / skin_path).string();
-  font_path = (base_dir / font_path).string();
+  load(path_join(base_dir, "settings.ini"));
+  skin_path = path_join(base_dir, skin_path);
+  font_path = path_join(base_dir, font_path);
 }
 
 static const std::unordered_map<std::string, KeyCode> kKeyMap = {
@@ -308,9 +318,14 @@ bool Settings::save(const std::string &path) const {
   auto opacity_pct = [](uint8_t v) { return v * 100 / 255; };
 
   file << "[rendering]\n";
-  file << "skin = "
-       << std::filesystem::relative(skin_path, base_dir).generic_string()
-       << "\n";
+  // Write skin_path relative to base_dir.
+  std::string rel_skin = skin_path;
+  if (auto pos = rel_skin.find(base_dir); pos == 0 && base_dir != ".") {
+    rel_skin = rel_skin.substr(base_dir.size());
+    if (!rel_skin.empty() && (rel_skin[0] == '/' || rel_skin[0] == '\\'))
+      rel_skin = rel_skin.substr(1);
+  }
+  file << "skin = " << rel_skin << "\n";
   file << "colored_ghost = " << (colored_ghost ? "true" : "false") << "\n";
   file << "ghost_opacity = " << opacity_pct(ghost_opacity) << "\n";
   file << "board_opacity = " << opacity_pct(board_opacity) << "\n";
@@ -349,5 +364,16 @@ bool Settings::save(const std::string &path) const {
        << "\n";
   file << "hard_drop_delay = " << game.hard_drop_delay.count() << "\n";
 
-  return file.good();
+  if (!file.good())
+    return false;
+
+#ifdef __EMSCRIPTEN__
+  file.close();
+  EM_ASM({
+    var content = FS.readFile(UTF8ToString($0), {encoding: 'utf8'});
+    localStorage.setItem('citris_settings', content);
+  }, path.c_str());
+#endif
+
+  return true;
 }
