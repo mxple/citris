@@ -15,6 +15,15 @@ public:
 
   std::string title() const override { return "Cheese Race"; }
 
+  // Tuning — competitive defaults matching jstris cheese race
+  std::chrono::milliseconds gravity_interval() const override {
+    return std::chrono::milliseconds{0}; // no gravity
+  }
+  std::chrono::milliseconds lock_delay() const override {
+    return std::chrono::milliseconds{500};
+  }
+  int max_lock_resets() const override { return 15; }
+
   bool undo_allowed() const override { return false; }
 
 

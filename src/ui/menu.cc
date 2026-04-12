@@ -59,7 +59,7 @@ std::unique_ptr<GameMode> Menu::run() {
                       ImGuiWindowFlags_NoScrollbar |
                       ImGuiWindowFlags_NoScrollWithMouse);
 
-    {
+    if (screen_ != Screen::Settings) {
       const char *title = "CITRIS";
       ImGui::SetWindowFontScale(2.5f);
       ImVec2 ts = ImGui::CalcTextSize(title);
@@ -69,7 +69,8 @@ std::unique_ptr<GameMode> Menu::run() {
       ImGui::SetWindowFontScale(1.0f);
     }
 
-    ImGui::SetCursorPosY(win_h * 0.35f);
+    if (screen_ != Screen::Settings)
+      ImGui::SetCursorPosY(win_h * 0.35f);
 
     std::unique_ptr<GameMode> selected;
     bool back_to_main = false;
@@ -101,7 +102,6 @@ std::unique_ptr<GameMode> Menu::run() {
       if (button("Back"))
         back_to_main = true;
     } else if (screen_ == Screen::Settings) {
-      ImGui::SetCursorPosY(win_h * 0.15f);
       settings_editor.draw();
       if (settings_editor.should_close()) {
         settings_editor.reset_close();

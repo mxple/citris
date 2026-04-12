@@ -12,9 +12,9 @@ public:
     return "Sprint " + std::to_string(target_lines_) + "L";
   }
 
-  // Tuning — fixed competitive defaults, not from settings.ini
+  // Tuning — competitive defaults matching TETR.IO/jstris
   std::chrono::milliseconds gravity_interval() const override {
-    return std::chrono::milliseconds{1000};
+    return std::chrono::milliseconds{0}; // no gravity
   }
   std::chrono::milliseconds lock_delay() const override {
     return std::chrono::milliseconds{500};

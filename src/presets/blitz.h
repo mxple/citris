@@ -15,7 +15,7 @@ public:
 
   // Tuning — fixed competitive defaults, not from settings.ini
   std::chrono::milliseconds gravity_interval() const override {
-    return std::chrono::milliseconds{-1};
+    return std::chrono::milliseconds{1000};
   }
   std::chrono::milliseconds lock_delay() const override {
     return std::chrono::milliseconds{500};

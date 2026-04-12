@@ -35,6 +35,9 @@ private:
   int das_ms_, arr_ms_, soft_drop_ms_;
   int gravity_ms_, lock_delay_ms_, garbage_delay_ms_, hard_drop_delay_ms_;
 
+  // Whether the "infinite" checkbox is ticked (negative ms = infinite)
+  bool gravity_infinite_, lock_delay_infinite_;
+
   // Adapter ints for opacity (0-100 percentage)
   int ghost_opacity_pct_, grid_opacity_pct_;
 

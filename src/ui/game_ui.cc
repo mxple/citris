@@ -138,7 +138,7 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
     // Stats panel — 4x17 area at the bottom of the left column.
     {
       ImGui::SetWindowFontScale(stats_scale);
-      constexpr int kStatsRows = 15;
+      constexpr int kStatsRows = 14;
       ImVec2 stats_pos =
           layout.pos(L::kHoldColX, L::kPadRowsSouth + 2, kStatsRows);
       ImVec2 stats_size = layout.size(L::kSideCols, kStatsRows);
@@ -146,23 +146,33 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
       ImGui::BeginGroup();
 
       const auto &s = vm.stats;
-      char time_buf[16], kps_buf[16], pps_buf[16], aps_buf[16];
+      char time_buf[16], pps_buf[16], apm_buf[16], kps_buf[16];
       fmt_time(time_buf, sizeof(time_buf), s.elapsed_s);
-      fmt_rate(kps_buf, sizeof(kps_buf), s.inputs, s.elapsed_s);
       fmt_rate(pps_buf, sizeof(pps_buf), s.pieces, s.elapsed_s);
-      fmt_rate(aps_buf, sizeof(aps_buf), s.attack, s.elapsed_s);
+      fmt_rate(kps_buf, sizeof(kps_buf), s.inputs, s.elapsed_s);
+      // APM = attack per minute
+      if (s.elapsed_s < 0.001f)
+        std::snprintf(apm_buf, sizeof(apm_buf), "0.00");
+      else
+        std::snprintf(apm_buf, sizeof(apm_buf), "%.2f",
+                      static_cast<float>(s.attack) / s.elapsed_s * 60.f);
 
       if (ImGui::BeginTable("stats", 2, ImGuiTableFlags_SizingStretchProp,
                             stats_size)) {
+        // Time & rates
         stat_row("TIME", time_buf);
-        stat_row("B2B", std::to_string(s.b2b).c_str());
-        stat_row("CMB", std::to_string(s.combo).c_str());
+        stat_row("PPS", pps_buf);
+        stat_row("APM", apm_buf);
+        stat_row("KPS", kps_buf);
+        // Counters
         stat_row("LNS", std::to_string(s.lines).c_str());
         stat_row("ATK", std::to_string(s.attack).c_str());
+        stat_row("NUM", std::to_string(s.pieces).c_str());
+        stat_row("TSN", std::to_string(s.tspins).c_str());
         stat_row("PC", std::to_string(s.pcs).c_str());
-        stat_row("KPS", kps_buf);
-        stat_row("PPS", pps_buf);
-        stat_row("APS", aps_buf);
+        // Attack state
+        stat_row("CMB", std::to_string(s.combo).c_str());
+        stat_row("B2B", std::to_string(s.b2b).c_str());
         ImGui::EndTable();
       }
 

@@ -45,8 +45,10 @@ void SettingsEditor::sync_from_settings() {
   das_ms_ = static_cast<int>(settings_.das.count());
   arr_ms_ = static_cast<int>(settings_.arr.count());
   soft_drop_ms_ = static_cast<int>(settings_.soft_drop_interval.count());
-  gravity_ms_ = static_cast<int>(settings_.game.gravity_interval.count());
-  lock_delay_ms_ = static_cast<int>(settings_.game.lock_delay.count());
+  gravity_infinite_ = settings_.game.gravity_interval.count() < 0;
+  gravity_ms_ = gravity_infinite_ ? 1000 : static_cast<int>(settings_.game.gravity_interval.count());
+  lock_delay_infinite_ = settings_.game.lock_delay.count() < 0;
+  lock_delay_ms_ = lock_delay_infinite_ ? 500 : static_cast<int>(settings_.game.lock_delay.count());
   garbage_delay_ms_ = static_cast<int>(settings_.game.garbage_delay.count());
   hard_drop_delay_ms_ =
       static_cast<int>(settings_.game.hard_drop_delay.count());
@@ -154,6 +156,9 @@ void SettingsEditor::draw() {
         }
       }
     }
+  } else if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    sync_from_settings();
+    close_requested_ = true;
   }
 
   ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.f), "SETTINGS");
@@ -252,9 +257,25 @@ void SettingsEditor::draw() {
   slider_row("Ghost Opacity %", &ghost_opacity_pct_, 0, 100);
   slider_row("Grid Opacity %", &grid_opacity_pct_, 0, 100);
 
+  // Row with an "Infinite" checkbox; when unchecked an InputInt slides in.
+  auto optional_ms_row = [&](const char *label, bool *infinite, int *ms) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(kLabelCol);
+    ImGui::PushID(label);
+    ImGui::Checkbox("Inf", infinite);
+    if (!*infinite) {
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(kWidgetW - ImGui::GetCursorPosX() + kLabelCol);
+      ImGui::InputInt("##v", ms);
+      if (*ms < 0) *ms = 0;
+    }
+    ImGui::PopID();
+  };
+
   ImGui::SeparatorText("Freeplay Settings");
-  int_row("Gravity Interval (ms)", &gravity_ms_);
-  int_row("Lock Delay (ms)", &lock_delay_ms_);
+  optional_ms_row("Gravity Interval (ms)", &gravity_infinite_, &gravity_ms_);
+  optional_ms_row("Lock Delay (ms)", &lock_delay_infinite_, &lock_delay_ms_);
   int_row("Garbage Delay (ms)", &garbage_delay_ms_);
   int_row("Hard Drop Delay (ms)", &hard_drop_delay_ms_);
   int_row("Max Lock Resets", &settings_.game.max_lock_resets);
@@ -279,8 +300,10 @@ void SettingsEditor::save_settings() {
   settings_.arr = std::chrono::milliseconds(std::max(0, arr_ms_));
   settings_.soft_drop_interval =
       std::chrono::milliseconds(std::max(0, soft_drop_ms_));
-  settings_.game.gravity_interval = std::chrono::milliseconds(gravity_ms_);
-  settings_.game.lock_delay = std::chrono::milliseconds(lock_delay_ms_);
+  settings_.game.gravity_interval = std::chrono::milliseconds(
+      gravity_infinite_ ? -1 : std::max(0, gravity_ms_));
+  settings_.game.lock_delay = std::chrono::milliseconds(
+      lock_delay_infinite_ ? -1 : std::max(0, lock_delay_ms_));
   settings_.game.garbage_delay =
       std::chrono::milliseconds(std::max(0, garbage_delay_ms_));
   settings_.game.hard_drop_delay =

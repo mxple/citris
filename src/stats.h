@@ -11,7 +11,7 @@ public:
   TimePoint start_time() const { return start_time_; }
 
   struct Snapshot {
-    int b2b, combo, lines, attack, pcs, inputs, pieces;
+    int b2b, combo, lines, attack, pcs, tspins, inputs, pieces;
     float elapsed_s;
   };
 
@@ -23,6 +23,7 @@ public:
         .lines = lines_,
         .attack = attack_,
         .pcs = pcs_,
+        .tspins = tspins_,
         .inputs = inputs_,
         .pieces = pieces_,
         .elapsed_s =
@@ -40,6 +41,9 @@ public:
       b2b_ = pl->new_b2b;
       if (pl->perfect_clear)
         pcs_++;
+      if (pl->lines_cleared > 0 &&
+          (pl->spin == SpinKind::TSpin || pl->spin == SpinKind::Mini))
+        tspins_++;
     } else if (std::holds_alternative<eng::GameOver>(ev)) {
       end_time_ = now;
     } else if (std::holds_alternative<eng::UndoPerformed>(ev)) {
@@ -60,7 +64,7 @@ public:
   }
 
   void reset() {
-    lines_ = attack_ = pcs_ = inputs_ = pieces_ = 0;
+    lines_ = attack_ = pcs_ = tspins_ = inputs_ = pieces_ = 0;
     combo_ = b2b_ = 0;
     start_time_ = SdlClock::now();
     end_time_.reset();
@@ -69,21 +73,22 @@ public:
 
 private:
   struct UndoState {
-    int lines, attack, pcs, inputs, pieces;
+    int lines, attack, pcs, tspins, inputs, pieces;
     int combo, b2b;
     TimePoint start_time;
     std::optional<TimePoint> end_time;
   };
 
   UndoState save() const {
-    return {lines_, attack_, pcs_, inputs_, pieces_, combo_, b2b_, start_time_,
-            end_time_};
+    return {lines_, attack_, pcs_, tspins_, inputs_, pieces_, combo_, b2b_,
+            start_time_, end_time_};
   }
 
   void restore(const UndoState &s) {
     lines_ = s.lines;
     attack_ = s.attack;
     pcs_ = s.pcs;
+    tspins_ = s.tspins;
     inputs_ = s.inputs;
     pieces_ = s.pieces;
     combo_ = s.combo;
@@ -95,7 +100,7 @@ private:
   static constexpr size_t kMaxUndoDepth = 100;
   std::deque<UndoState> undo_stack_;
 
-  int lines_ = 0, attack_ = 0, pcs_ = 0, inputs_ = 0, pieces_ = 0;
+  int lines_ = 0, attack_ = 0, pcs_ = 0, tspins_ = 0, inputs_ = 0, pieces_ = 0;
   int combo_ = 0, b2b_ = 0;
   TimePoint start_time_;
   std::optional<TimePoint> end_time_;

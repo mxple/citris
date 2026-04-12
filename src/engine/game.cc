@@ -277,6 +277,11 @@ void Game::lock_piece() {
   total_attack_ += attack;
 
   bool pc = cleared > 0 && board_.is_empty();
+  if (pc) {
+    attack += 10;
+    pending_attack_ += 10;
+    total_attack_ += 10;
+  }
   if (cleared > 0 || spin != SpinKind::None) {
     last_clear_ = {cleared, spin, pc, piece_gen_};
   }
