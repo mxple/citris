@@ -4,7 +4,7 @@
 
 class Stats {
 public:
-  Stats() : start_time_(std::chrono::steady_clock::now()) {}
+  Stats() : start_time_(SdlClock::now()) {}
 
 
   int lines() const { return lines_; }
@@ -62,7 +62,7 @@ public:
   void reset() {
     lines_ = attack_ = pcs_ = inputs_ = pieces_ = 0;
     combo_ = b2b_ = 0;
-    start_time_ = std::chrono::steady_clock::now();
+    start_time_ = SdlClock::now();
     end_time_.reset();
     undo_stack_.clear();
   }

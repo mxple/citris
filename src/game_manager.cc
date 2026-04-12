@@ -21,7 +21,7 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_));
   game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
 
-  auto now = std::chrono::steady_clock::now();
+  auto now = SdlClock::now();
   mode_->on_start(now);
 
   game_->drain_events();
@@ -38,7 +38,7 @@ void GameManager::reset() {
   controllers_.push_back(std::make_unique<PlayerController>(settings_));
   controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_));
 
-  auto now = std::chrono::steady_clock::now();
+  auto now = SdlClock::now();
   mode_->on_start(now);
 
   for (auto &ev : game_->drain_events())
@@ -50,7 +50,7 @@ run_start:
   std::vector<InputEvent> input_events;
 
   while (running_) {
-    auto now = std::chrono::steady_clock::now();
+    auto now = SdlClock::now();
 
     // 1. Collect SDL events → feed ImGui first, then wrap for controllers.
     ImGuiIO &io = ImGui::GetIO();
@@ -69,11 +69,13 @@ run_start:
         break;
       case SDL_EVENT_KEY_DOWN:
         if (!ev.key.repeat && !io.WantCaptureKeyboard)
-          input_events.push_back(KeyDown{ev.key.key});
+          input_events.push_back(
+              KeyDown{ev.key.key, TimePoint(Duration(ev.key.timestamp))});
         break;
       case SDL_EVENT_KEY_UP:
         if (!io.WantCaptureKeyboard)
-          input_events.push_back(KeyUp{ev.key.key});
+          input_events.push_back(
+              KeyUp{ev.key.key, TimePoint(Duration(ev.key.timestamp))});
         break;
       }
     }
@@ -96,8 +98,13 @@ run_start:
           goto run_start;
         }
       }
+      TimePoint event_time = now;
+      if (auto *kd2 = std::get_if<KeyDown>(&iev))
+        event_time = kd2->timestamp;
+      else if (auto *ku = std::get_if<KeyUp>(&iev))
+        event_time = ku->timestamp;
       for (auto &ctrl : controllers_)
-        ctrl->update(iev, now, game_state, cmds_);
+        ctrl->update(iev, event_time, game_state, cmds_);
     }
     input_events.clear();
 

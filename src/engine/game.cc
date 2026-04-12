@@ -5,7 +5,7 @@
 Game::Game(const GameMode &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)) {
   bag_ = std::make_unique<SevenBagRandomizer>(seed);
-  now_ = std::chrono::steady_clock::now();
+  now_ = SdlClock::now();
   spawn_piece();
 }
 
