@@ -8,6 +8,7 @@
 #include <emscripten.h>
 #elif defined(_WIN32)
 #include <windows.h>
+#include <filesystem>
 #else
 #include <filesystem>
 #endif

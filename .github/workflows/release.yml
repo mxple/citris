@@ -19,9 +19,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xxd libx11-dev libxft-dev libxext-dev \
             libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
-            libwayland-dev libegl-dev libgl-dev libgles-dev libibus-1.0-dev \
+            libwayland-dev libegl-dev libgl-dev libgles-dev \
             libudev-dev libdbus-1-dev libpulse-dev libasound2-dev libdecor-0-dev \
-            libfreetype-dev
+            libfreetype-dev libxtst-dev
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
