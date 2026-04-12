@@ -176,21 +176,18 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
         ImGui::EndTable();
       }
 
-      ImGui::EndGroup();
-      float stats_bottom = ImGui::GetItemRectMax().y;
-
       if (vm.state.last_clear.lines > 0 ||
           vm.state.last_clear.spin != SpinKind::None) {
-        std::string label;
+        const char *spin_label = nullptr;
         switch (vm.state.last_clear.spin) {
         case SpinKind::TSpin:
-          label = "tspin ";
+          spin_label = "tspin";
           break;
         case SpinKind::Mini:
-          label = "tspin mini ";
+          spin_label = "tspin mini";
           break;
         case SpinKind::AllSpin:
-          label = "allspin ";
+          spin_label = "allspin";
           break;
         case SpinKind::None:
           break;
@@ -198,17 +195,17 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
         static const char *kLineNames[] = {"", "single", "double", "triple",
                                            "quad"};
         int idx = std::clamp(vm.state.last_clear.lines, 0, 4);
-        label += kLineNames[idx];
 
-        float action_y = stats_bottom + layout.cell_px * 0.3f;
-        ImGui::SetCursorScreenPos(ImVec2(stats_pos.x, action_y));
-        ImGui::TextColored(ImVec4(1.f, 1.f, 0.4f, 1.f), "%s", label.c_str());
-        if (vm.state.last_clear.perfect_clear) {
-          ImGui::SetCursorScreenPos(
-              ImVec2(stats_pos.x, ImGui::GetCursorScreenPos().y));
+        ImGui::Dummy(ImVec2(0, layout.cell_px * 0.3f));
+        ImVec4 action_col(1.f, 1.f, 0.4f, 1.f);
+        if (spin_label)
+          ImGui::TextColored(action_col, "%s", spin_label);
+        if (idx > 0)
+          ImGui::TextColored(action_col, "%s", kLineNames[idx]);
+        if (vm.state.last_clear.perfect_clear)
           ImGui::TextColored(ImVec4(1.f, 0.8f, 0.2f, 1.f), "perfect clear");
-        }
       }
+      ImGui::EndGroup();
       ImGui::SetWindowFontScale(1.f);
     }
 

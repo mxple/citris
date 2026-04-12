@@ -61,7 +61,8 @@ void SettingsEditor::discover_skins() {
   skin_paths_.clear();
 #ifdef __EMSCRIPTEN__
   for (int i = 1; i <= 20; ++i) {
-    auto path = path_join(settings_.base_dir, "assets/skin" + std::to_string(i) + ".png");
+    std::string num = (i < 10 ? "0" : "") + std::to_string(i);
+    auto path = path_join(settings_.base_dir, "assets/skin" + num + ".png");
     if (FILE *f = fopen(path.c_str(), "r")) {
       fclose(f);
       skin_paths_.push_back(path);
