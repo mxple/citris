@@ -37,9 +37,7 @@ private:
 
   std::unique_ptr<Game> game_;
   std::vector<std::unique_ptr<IController>> controllers_;
-  std::unique_ptr<Renderer> renderer_obj_;
-
-  TimePoint next_stats_refresh_{};
+  std::unique_ptr<Renderer> game_renderer_;
 
   // Multiplayer (partial)
   std::unique_ptr<Game> game2_;

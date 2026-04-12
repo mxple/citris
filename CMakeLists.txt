@@ -13,8 +13,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
 find_package(SDL3 REQUIRED)
-find_package(SDL3_ttf REQUIRED)
 find_package(SDL3_image REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -51,7 +51,7 @@ target_include_directories(tetris_lib PUBLIC
   src/presets
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_image::SDL3_image)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui)
 add_dependencies(tetris_lib embed_font)
 
 # Main executable — WIN32/MACOSX_BUNDLE suppress the console window

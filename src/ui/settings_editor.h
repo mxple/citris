@@ -1,33 +1,35 @@
 #pragma once
 
 #include "settings.h"
-#include "ui/widget.h"
 #include <SDL3/SDL.h>
-#include <memory>
+#include <string>
 #include <vector>
 
 class SettingsEditor {
 public:
   SettingsEditor(SDL_Renderer *renderer, SDL_Window *window,
                  Settings &settings);
+  ~SettingsEditor();
 
-  void run();
+  // Draws the settings editor UI into the current ImGui frame. Assumes the
+  // caller has already called ImGui::NewFrame() and owns an enclosing
+  // Begin/End (or panel). Does not call Begin/End itself.
+  void draw();
+
+  // Returns true if the user clicked Save or Back in the last draw() call.
+  bool should_close() const { return close_requested_; }
+  void reset_close() { close_requested_ = false; }
 
 private:
-  void build_widgets();
-  void draw();
   void save_settings();
-  float logical_height() const;
+  void discover_skins();
+  void sync_from_settings();
+  void reload_skin_preview();
+  int keycode_to_display(const char *buf, size_t n, unsigned key);
 
   SDL_Renderer *renderer_;
   SDL_Window *window_;
   Settings &settings_;
-
-  std::vector<std::unique_ptr<Widget>> widgets_;
-  float scroll_y_ = 0.f;
-  float content_height_ = 0.f;
-  bool dirty_ = true;
-  int hovered_idx_ = -1;
 
   // Adapter ints for chrono::ms fields
   int das_ms_, arr_ms_, soft_drop_ms_;
@@ -36,6 +38,19 @@ private:
   // Adapter ints for opacity (0-100 percentage)
   int ghost_opacity_pct_, grid_opacity_pct_;
 
-  // Adapter int for scale factor (percentage, e.g. 150 = 1.5x)
+  // Scale factor as percent
   int scale_pct_;
+
+  std::vector<std::string> skin_paths_;
+  int skin_index_ = 0;
+
+  // Cached texture for previewing the currently selected skin.
+  SDL_Texture *preview_tex_ = nullptr;
+  std::string preview_loaded_path_;
+
+  // Keybind capture state: index of currently-capturing key field, -1 if
+  // none. Indices map to keybind_targets_ below.
+  int capturing_ = -1;
+
+  bool close_requested_ = false;
 };

@@ -1,9 +1,13 @@
 #include "game_manager.h"
 #include "controller/player_controller.h"
 #include "controller/tool_controller.h"
-#include <chrono>
+#include "ui/game_ui.h"
 
-static constexpr auto kStatsInterval = std::chrono::milliseconds(16);
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_sdlrenderer3.h>
+
+#include <chrono>
 
 GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
                          const Settings &settings,
@@ -15,13 +19,11 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   game_ = std::make_unique<Game>(*mode_, std::move(board));
   controllers_.push_back(std::make_unique<PlayerController>(settings_));
   controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_));
-  renderer_obj_ = std::make_unique<Renderer>(renderer_, settings_);
+  game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
 
   auto now = std::chrono::steady_clock::now();
   mode_->on_start(now);
-  next_stats_refresh_ = now + kStatsInterval;
 
-  // Drain initial events (PieceSpawned from constructor)
   game_->drain_events();
 }
 
@@ -38,46 +40,43 @@ void GameManager::reset() {
 
   auto now = std::chrono::steady_clock::now();
   mode_->on_start(now);
-  next_stats_refresh_ = now + kStatsInterval;
 
-  // Drain initial events — push stats snapshot for first piece
   for (auto &ev : game_->drain_events())
     stats_.process_event(ev, now);
 }
 
 bool GameManager::run() {
-  handle_resize(renderer_, settings_.auto_scale);
-
 run_start:
   std::vector<InputEvent> input_events;
-
-  auto wrap_sdl = [&](const SDL_Event &ev) {
-    switch (ev.type) {
-    case SDL_EVENT_QUIT:
-      input_events.push_back(WindowClose{});
-      break;
-    case SDL_EVENT_WINDOW_RESIZED:
-      input_events.push_back(
-          WindowResize{static_cast<unsigned>(ev.window.data1),
-                       static_cast<unsigned>(ev.window.data2)});
-      break;
-    case SDL_EVENT_KEY_DOWN:
-      if (!ev.key.repeat)
-        input_events.push_back(KeyDown{ev.key.key});
-      break;
-    case SDL_EVENT_KEY_UP:
-      input_events.push_back(KeyUp{ev.key.key});
-      break;
-    }
-  };
 
   while (running_) {
     auto now = std::chrono::steady_clock::now();
 
-    // 1. Collect external input events
+    // 1. Collect SDL events → feed ImGui first, then wrap for controllers.
+    ImGuiIO &io = ImGui::GetIO();
     SDL_Event ev;
-    while (SDL_PollEvent(&ev))
-      wrap_sdl(ev);
+    while (SDL_PollEvent(&ev)) {
+      ImGui_ImplSDL3_ProcessEvent(&ev);
+
+      switch (ev.type) {
+      case SDL_EVENT_QUIT:
+        input_events.push_back(WindowClose{});
+        break;
+      case SDL_EVENT_WINDOW_RESIZED:
+        input_events.push_back(
+            WindowResize{static_cast<unsigned>(ev.window.data1),
+                          static_cast<unsigned>(ev.window.data2)});
+        break;
+      case SDL_EVENT_KEY_DOWN:
+        if (!ev.key.repeat && !io.WantCaptureKeyboard)
+          input_events.push_back(KeyDown{ev.key.key});
+        break;
+      case SDL_EVENT_KEY_UP:
+        if (!io.WantCaptureKeyboard)
+          input_events.push_back(KeyUp{ev.key.key});
+        break;
+      }
+    }
 
     // 2. Controller timers + input processing
     for (auto &ctrl : controllers_)
@@ -85,15 +84,10 @@ run_start:
 
     auto game_state = game_->state();
     for (auto &iev : input_events) {
-      // window events
       if (std::holds_alternative<WindowClose>(iev)) {
         running_ = false;
         return running_;
-      } else if (auto *wr = std::get_if<WindowResize>(&iev)) {
-        handle_resize(renderer_, settings_.auto_scale);
       }
-
-      // keyboard events
       if (auto *kd = std::get_if<KeyDown>(&iev)) {
         if (kd->key == SDLK_BACKSPACE) {
           return running_;
@@ -112,53 +106,29 @@ run_start:
     game_->tick(now);
     cmds_.clear();
 
-    // 4. Drain engine events -> stats + mode hooks
+    // 4. Drain engine events
     CommandBuffer rule_cmds;
     process_engine_events(now, rule_cmds);
 
-    // Apply rule-generated commands (e.g. SetGameOver from presets)
     if (!rule_cmds.empty()) {
       game_->apply(rule_cmds);
       CommandBuffer discard;
       process_engine_events(now, discard);
     }
 
-    // Render
-    bool board_changed = game_->dirty();
-    if (board_changed)
-      game_->clear_dirty();
+    // 5. Render: ImGui frame + embedded board texture
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
 
-    bool stats_due = now >= next_stats_refresh_;
-    if (stats_due)
-      next_stats_refresh_ = now + kStatsInterval;
+    ViewModel vm = build_view_model(now);
+    draw_game_ui(*game_renderer_, window_, vm, settings_);
 
-    if (board_changed) {
-      renderer_obj_->draw(build_view_model(now));
-    } else if (stats_due) {
-      renderer_obj_->draw_stats(build_view_model(now));
-    }
-
-    // Sleep until next deadline
-    std::optional<TimePoint> wake;
-    auto consider = [&](std::optional<TimePoint> tp) {
-      if (tp && (!wake || *tp < *wake))
-        wake = tp;
-    };
-    consider(game_->next_deadline());
-    for (auto &ctrl : controllers_)
-      consider(ctrl->next_deadline());
-    consider(next_stats_refresh_);
-
-    if (wake) {
-      now = std::chrono::steady_clock::now();
-      auto remaining = *wake - now;
-      auto ms =
-          std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
-      int timeout_ms = std::max(static_cast<int>(ms.count()), 1);
-      SDL_WaitEventTimeout(NULL, timeout_ms);
-    } else {
-      SDL_WaitEvent(NULL);
-    }
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_RenderClear(renderer_);
+    ImGui::Render();
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer_);
+    SDL_RenderPresent(renderer_);
   }
   return running_;
 }

@@ -4,6 +4,27 @@
 #include <iostream>
 #include <unordered_map>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+Settings::Settings(const char *argv0) {
+#ifdef _WIN32
+  (void)argv0;
+  wchar_t exe_buf[MAX_PATH];
+  GetModuleFileNameW(nullptr, exe_buf, MAX_PATH);
+  base_dir = std::filesystem::path(exe_buf).parent_path();
+#else
+  base_dir = std::filesystem::path(argv0).parent_path();
+#endif
+  if (base_dir.empty())
+    base_dir = ".";
+  load((base_dir / "settings.ini").string());
+  // Resolve asset paths (possibly updated by load()) to absolute form.
+  skin_path = (base_dir / skin_path).string();
+  font_path = (base_dir / font_path).string();
+}
+
 static const std::unordered_map<std::string, KeyCode> kKeyMap = {
     {"a", SDLK_A},
     {"b", SDLK_B},
@@ -194,6 +215,12 @@ bool Settings::load(const std::string &path) {
         if (ok)
           ghost_opacity =
               static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
+      } else if (key == "board_opacity") {
+        int pct;
+        ok = parse_int(val, pct);
+        if (ok)
+          board_opacity =
+              static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
       } else if (key == "grid_opacity") {
         int pct;
         ok = parse_int(val, pct);
@@ -210,6 +237,8 @@ bool Settings::load(const std::string &path) {
         }
       } else if (key == "auto_scale")
         ok = parse_bool(val, auto_scale);
+      else if (key == "antialiasing")
+        ok = parse_bool(val, antialiasing);
       else
         ok = false;
     } else if (section == "controls") {
@@ -279,12 +308,16 @@ bool Settings::save(const std::string &path) const {
   auto opacity_pct = [](uint8_t v) { return v * 100 / 255; };
 
   file << "[rendering]\n";
-  file << "skin = " << skin_path << "\n";
+  file << "skin = "
+       << std::filesystem::relative(skin_path, base_dir).generic_string()
+       << "\n";
   file << "colored_ghost = " << (colored_ghost ? "true" : "false") << "\n";
   file << "ghost_opacity = " << opacity_pct(ghost_opacity) << "\n";
+  file << "board_opacity = " << opacity_pct(board_opacity) << "\n";
   file << "grid_opacity = " << opacity_pct(grid_opacity) << "\n";
   file << "scale_factor = " << scale_factor << "\n";
   file << "auto_scale = " << (auto_scale ? "true" : "false") << "\n";
+  file << "antialiasing = " << (antialiasing ? "true" : "false") << "\n";
   file << "\n";
 
   file << "[controls]\n";

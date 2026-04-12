@@ -14,14 +14,14 @@ struct GameTuning {
 };
 
 struct Settings {
+  // Derives base_dir from the executable location (argv[0] on POSIX,
+  // GetModuleFileNameW on Windows) and loads settings.ini from there.
+  explicit Settings(const char *argv0);
+
   // Base directory (derived from argv[0], for resolving relative paths)
   std::filesystem::path base_dir = ".";
 
-  std::string resolve(const std::string &rel) const {
-    return (base_dir / rel).string();
-  }
-
-  // Rendering
+  // Rendering (paths below are resolved to absolute form in the ctor)
   std::string skin_path = "assets/skin.png";
   std::string font_path = "assets/FreeMono.otf";
 
@@ -52,6 +52,12 @@ struct Settings {
   // Ghost piece rendering
   bool colored_ghost = true;
   uint8_t ghost_opacity = 100;
+
+  // Linear filtering for skin/board textures (vs pixel-perfect nearest)
+  bool antialiasing = false;
+
+  // Board background
+  uint8_t board_opacity = 255;
 
   // Gridlines
   uint8_t grid_opacity = 40;
