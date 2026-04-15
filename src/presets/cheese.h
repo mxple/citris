@@ -10,6 +10,7 @@ class CheeseMode : public GameMode {
 public:
   static constexpr int kTotalCheese = 100;
   static constexpr int kBoardFill = 10;
+  static constexpr int kMinGarbage = 3;
 
   CheeseMode() = default;
 
@@ -27,9 +28,8 @@ public:
 
 
   void setup_board(Board &board) override {
-    std::uniform_int_distribution<int> dist(0, Board::kWidth - 1);
     for (int i = 0; i < kBoardFill; ++i)
-      board.add_garbage(1, dist(rng_));
+      board.add_garbage(1, next_hole());
     cheese_reserve_ = kTotalCheese - kBoardFill;
   }
 
@@ -42,16 +42,14 @@ public:
       return;
     }
 
-    if (ev.lines_cleared == 0 && ev.prev_combo > 0) {
-      if (cheese_reserve_ > 0) {
-        int to_add =
-            std::min(kBoardFill - garbage_on_board, cheese_reserve_);
-        std::uniform_int_distribution<int> dist(0, Board::kWidth - 1);
-        for (int i = 0; i < to_add; ++i)
-          cmds.push(cmd::AddGarbage{1, dist(rng_), true});
-        cheese_reserve_ -= to_add;
-      }
-    }
+    int target = kMinGarbage;
+    if (ev.lines_cleared == 0 && ev.prev_combo > 0)
+      target = kBoardFill;
+
+    int to_add = std::clamp(target - garbage_on_board, 0, cheese_reserve_);
+    for (int i = 0; i < to_add; ++i)
+      cmds.push(cmd::AddGarbage{1, next_hole(), true});
+    cheese_reserve_ -= to_add;
   }
 
   void fill_hud(HudData &hud, const GameState &state,
@@ -96,6 +94,20 @@ private:
     return count;
   }
 
+  int next_hole() {
+    if (last_hole_ < 0) {
+      std::uniform_int_distribution<int> dist(0, Board::kWidth - 1);
+      last_hole_ = dist(rng_);
+    } else {
+      std::uniform_int_distribution<int> dist(0, Board::kWidth - 2);
+      int h = dist(rng_);
+      if (h >= last_hole_) ++h;
+      last_hole_ = h;
+    }
+    return last_hole_;
+  }
+
   int cheese_reserve_ = kTotalCheese - kBoardFill;
+  int last_hole_ = -1;
   std::mt19937 rng_{std::random_device{}()};
 };
