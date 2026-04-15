@@ -1,4 +1,5 @@
 #include "ui/menu.h"
+#include "presets/opener.h"
 #include "presets/presets.h"
 #include "ui/settings_editor.h"
 
@@ -99,8 +100,22 @@ std::unique_ptr<GameMode> Menu::run() {
         }
       }
       ImGui::Spacing();
+      if (button("Opener Trainer")) {
+        openers_ = all_openers();
+        screen_ = Screen::OpenerSelect;
+      }
+      ImGui::Spacing();
       if (button("Back"))
         back_to_main = true;
+    } else if (screen_ == Screen::OpenerSelect) {
+      for (int i = 0; i < (int)openers_.size(); ++i) {
+        if (button(openers_[i].name.c_str())) {
+          selected = std::make_unique<OpenerMode>(openers_[i]);
+        }
+      }
+      ImGui::Spacing();
+      if (button("Back"))
+        screen_ = Screen::PresetSelect;
     } else if (screen_ == Screen::Settings) {
       settings_editor.draw();
       if (settings_editor.should_close()) {

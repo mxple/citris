@@ -21,6 +21,7 @@ public:
   int max_lock_resets() const override { return 15; }
 
   bool undo_allowed() const override { return false; }
+  std::optional<EvalType> default_eval_type() const override { return EvalType::Sprint; }
 
 
   void on_piece_locked(const eng::PieceLocked &, const GameState &state,

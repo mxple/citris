@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/checkpoint.h"
 #include "presets/game_mode.h"
 #include "settings.h"
 #include <SDL3/SDL.h>
@@ -15,7 +16,7 @@ public:
   std::unique_ptr<GameMode> run();
 
 private:
-  enum class Screen { Main, PresetSelect, Settings };
+  enum class Screen { Main, PresetSelect, Settings, OpenerSelect };
 
   std::unique_ptr<GameMode> make_selected_mode(int index);
 
@@ -25,4 +26,5 @@ private:
 
   Screen screen_ = Screen::Main;
   std::vector<std::unique_ptr<GameMode>> modes_;
+  std::vector<Opener> openers_;
 };

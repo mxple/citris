@@ -3,16 +3,17 @@
 #include "ai/ai.h"
 #include "ai/board_bitset.h"
 #include "ai/checkpoint.h"
-#include "ai/eval.h"
-#include "ai/eval_cheese.h"
-#include "ai/eval_sprint.h"
-#include "ai/eval_tsd.h"
+#include "ai/eval/eval.h"
+#include "ai/eval/cheese.h"
+#include "ai/eval/sprint.h"
+#include "ai/eval/tsd.h"
 #include "ai/search_task.h"
 #include "engine/game_state.h"
 #include "engine_event.h"
+#include <functional>
+#include <optional>
 
 struct AIState {
-  enum class EvalType { Tsd, Sprint, Cheese, Default };
 
   AI ai;
   Plan plan;
@@ -28,13 +29,24 @@ struct AIState {
   bool plan_computed = false;
   bool needs_search = false;
   bool autoplay = false;
-  EvalType eval_type = EvalType::Tsd;
+  EvalType eval_type = EvalType::Default;
   int max_visible = 7;
   int input_interval_ms = 250;
+
+  // Custom evaluator override — when set, used instead of eval_type.
+  // Caller owns the factory lifetime.
+  std::function<std::unique_ptr<Evaluator>()> custom_evaluator;
+
+  // Config overrides (applied on next start_search if set)
+  std::optional<int> override_beam_width;
+  std::optional<int> override_max_depth;
 
   bool searching() const { return search_task && !search_task->ready(); }
 
   std::unique_ptr<Evaluator> make_evaluator() const {
+    if (custom_evaluator)
+      return custom_evaluator();
+
     switch (eval_type) {
     case EvalType::Tsd:
       return std::make_unique<TsdEvaluator>();
@@ -66,9 +78,10 @@ struct AIState {
   void rebuild_ai() {
     search_task.reset();
     ai = AI::builder()
-             .width(800)
-             .depth(12)
+             .width(override_beam_width.value_or(800))
+             .depth(override_max_depth.value_or(12))
              .sonic(true)
+             .extend_bag(true)
              .evaluator(make_evaluator())
              .build();
   }
@@ -84,6 +97,14 @@ struct AIState {
 
     search_board = bb;
     ai.set_evaluator(make_evaluator());
+
+    AIConfig cfg;
+    cfg.beam_width = override_beam_width.value_or(800);
+    cfg.max_depth = override_max_depth.value_or(
+        static_cast<int>(queue.size()));
+    cfg.sonic_only = true;
+    cfg.extend_queue_7bag = true;
+    ai.set_config(cfg);
 
     SearchState root;
     root.board = bb;
@@ -128,6 +149,9 @@ struct AIState {
     plan_computed = false;
     needs_search = false;
     autoplay = false;
+    custom_evaluator = nullptr;
+    override_beam_width.reset();
+    override_max_depth.reset();
   }
 
 private:

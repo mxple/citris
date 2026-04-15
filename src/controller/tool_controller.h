@@ -12,7 +12,7 @@ class ToolController : public IController {
 public:
   ToolController(const Settings &settings, const GameMode &mode, AIState &ai)
       : undo_key_(settings.undo), undo_allowed_(mode.undo_allowed()),
-        ai_(ai) {}
+        mode_(mode), ai_(ai) {}
 
   void update(const InputEvent &ev, TimePoint, const GameState &,
               CommandBuffer &cmds) override {
@@ -21,12 +21,13 @@ public:
         cmds.push(cmd::Undo{});
 
       if (kd->key == SDLK_F3) {
-        ai_.active = !ai_.active;
-        if (ai_.active) {
+        show_window_ = !show_window_;
+        if (show_window_ && !ai_.active) {
+          if (auto def = mode_.default_eval_type())
+            ai_.eval_type = *def;
+          ai_.active = true;
           ai_.rebuild_ai();
           ai_.needs_search = true;
-        } else {
-          ai_.deactivate();
         }
       }
     }
@@ -57,26 +58,86 @@ public:
   }
 
   void draw_imgui() override {
-    if (!ai_.active)
+    if (!show_window_)
       return;
 
     ImGui::SetNextWindowSize(ImVec2(220, 0), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("AI Debug", &ai_.active)) {
-      static const char *labels[] = {"TSD", "Sprint", "Cheese", "Default"};
-      int current = static_cast<int>(ai_.eval_type);
-      if (ImGui::Combo("Evaluator", &current, labels, 4)) {
-        ai_.eval_type = static_cast<AIState::EvalType>(current);
-        ai_.rebuild_ai();
-        ai_.needs_search = true;
+    if (ImGui::Begin("AI Debug", &show_window_)) {
+      // Controls
+      if (ImGui::BeginTable("##ctrl", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Autoplay");
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("##autoplay", &ai_.autoplay);
+
+        if (ai_.autoplay) {
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::TextUnformatted("Speed");
+          ImGui::TableNextColumn();
+          int speed = 500 - ai_.input_interval_ms;
+          ImGui::SetNextItemWidth(-FLT_MIN);
+          if (ImGui::SliderInt("##speed", &speed, 0, 500))
+            ai_.input_interval_ms = 500 - speed;
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Preview");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::SliderInt("##preview", &ai_.max_visible, 0, 8);
+
+        ImGui::EndTable();
       }
 
-      ImGui::Checkbox("Autoplay", &ai_.autoplay);
-      if (ai_.autoplay)
-        ImGui::SliderInt("Input ms", &ai_.input_interval_ms, 0, 500);
+      // Search settings
+      ImGui::SeparatorText("Search Settings");
+      if (ImGui::BeginTable("##search", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Eval");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ai_.custom_evaluator) {
+          ImGui::TextUnformatted("Custom");
+        } else {
+          static const char *labels[] = {"TSD", "Sprint", "Cheese", "Default"};
+          int current = static_cast<int>(ai_.eval_type);
+          if (ImGui::Combo("##eval", &current, labels, 4)) {
+            ai_.eval_type = static_cast<EvalType>(current);
+            ai_.rebuild_ai();
+            ai_.needs_search = true;
+          }
+        }
 
-      if (ImGui::SliderInt("Show pieces", &ai_.max_visible, 1, 14))
-        ;
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Depth");
+        ImGui::TableNextColumn();
+        int depth = ai_.override_max_depth.value_or(12);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##depth", &depth, 0, 20)) {
+          ai_.override_max_depth = depth;
+          ai_.needs_search = true;
+        }
 
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Beam");
+        ImGui::TableNextColumn();
+        int beam = ai_.override_beam_width.value_or(800);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##beam", &beam, 0, 2000)) {
+          ai_.override_beam_width = beam;
+          ai_.needs_search = true;
+        }
+
+        ImGui::EndTable();
+      }
+
+      // Debug info
       ImGui::Separator();
       {
         bool busy = ai_.searching();
@@ -92,7 +153,6 @@ public:
       else
         ImGui::TextUnformatted("No plan");
 
-      // Eval debug: score breakdown for current board
       auto eval = ai_.make_evaluator();
       BoardBitset bb = BoardBitset::from_board(last_state_.board);
       float board_score = eval->board_eval(bb);
@@ -100,26 +160,29 @@ public:
       ImGui::Separator();
       ImGui::Text("Board eval: %.1f", board_score);
 
-      // Show search result details
       if (ai_.plan_computed && !ai_.plan.steps.empty()) {
         ImGui::Text("Best score: %.1f", ai_.last_result.score);
         ImGui::Text("Search depth: %d", ai_.last_depth);
 
-        // Top root moves
         if (!ai_.last_result.root_scores.empty()) {
           ImGui::Separator();
           ImGui::TextUnformatted("Top moves:");
           static const char *piece_names[] = {"I", "O", "T", "S",
                                               "Z", "J", "L"};
+          static const char *rot_names[] = {"N", "E", "S", "W"};
           int shown = std::min((int)ai_.last_result.root_scores.size(), 5);
           for (int i = 0; i < shown; ++i) {
             auto &[pl, sc] = ai_.last_result.root_scores[i];
-            ImGui::Text(" %d. %s (%d,%d) %.1f", i + 1,
-                        piece_names[static_cast<int>(pl.type)], pl.x, pl.y,
-                        sc);
+            ImGui::Text(" %d. %s-%s (%d,%d) %.1f", i + 1,
+                        piece_names[static_cast<int>(pl.type)],
+                        rot_names[static_cast<int>(pl.rotation)],
+                        pl.x, pl.y, sc);
           }
         }
       }
+
+      ImGui::Separator();
+      ImGui::Checkbox("Enabled", &ai_.active);
     }
     ImGui::End();
   }
@@ -127,6 +190,8 @@ public:
 private:
   KeyCode undo_key_;
   bool undo_allowed_;
+  bool show_window_ = false;
+  const GameMode &mode_;
   AIState &ai_;
   GameState last_state_;
 };

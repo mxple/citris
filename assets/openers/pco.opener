@@ -1,0 +1,20 @@
+name: PCO
+description: Classic PCO opener
+---
+# Step 1: Base (7 pieces)
+[strict]
+pieces: 7
+atleast: I O T S Z J L
+ZZ....****
+TZZ...****
+TTSS..****
+TSS...****
+---
+# Step 2: Perfect clear (3 pieces after base)
+[strict]
+pieces: 3
+..........
+..........
+..........
+..........
+---

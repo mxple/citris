@@ -7,6 +7,8 @@
 
 struct Checkpoint;
 
+enum class EvalType : int { Tsd, Sprint, Cheese, Default };
+
 // ---------------------------------------------------------------------------
 // Board quality weights — reusable by any evaluator.
 // ---------------------------------------------------------------------------
@@ -60,7 +62,6 @@ struct Evaluator {
   virtual int move_ordering_key(const Placement &,
                                 const SearchState &) const { return 0; }
   virtual bool is_loud(const SearchState &) const { return false; }
-  virtual bool is_goal(const SearchState &) const { return false; }
   virtual bool accumulate_tactical() const { return false; }
 };
 

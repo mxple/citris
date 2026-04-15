@@ -93,6 +93,7 @@ file(GLOB LIB_SOURCES
   "src/presets/*.cc"
   "src/ui/*.cc"
   "src/ai/*.cc"
+  "src/ai/eval/*.cc"
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
@@ -104,6 +105,7 @@ target_include_directories(tetris_lib PUBLIC
   src/render
   src/presets
   src/ai
+  src/ai/eval
   "${CMAKE_BINARY_DIR}/generated"
 )
 target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui)

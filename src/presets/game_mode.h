@@ -8,6 +8,7 @@
 #include <string>
 
 class Board;
+enum class EvalType : int;
 
 class GameMode {
 public:
@@ -32,6 +33,7 @@ public:
   virtual bool infinite_hold() const { return false; }
   virtual bool hold_allowed() const { return true; }
   virtual bool undo_allowed() const { return true; }
+  virtual std::optional<EvalType> default_eval_type() const { return std::nullopt; }
 
   // Lifecycle
   virtual void on_start(TimePoint now) { start_time_ = now; end_time_.reset(); }

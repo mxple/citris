@@ -36,7 +36,6 @@ void AI::reset(SearchState root) {
   root_idx_ = TreeNode::kNull;
   best_leaf_ = TreeNode::kNull;
   best_score_ = -1e18f;
-  goal_found_ = false;
   root_scores_.clear();
   beam_.clear();
   next_beam_.clear();
@@ -151,7 +150,6 @@ void AI::reroot(uint32_t new_root) {
 
   best_leaf_ = TreeNode::kNull;
   best_score_ = -1e18f;
-  goal_found_ = false;
   root_scores_.clear();
 }
 
@@ -184,7 +182,6 @@ void AI::init_beam_from_root() {
   beam_.clear();
   next_beam_.clear();
   search_depth_ = 0;
-  goal_found_ = false;
   best_score_ = -1e18f;
   best_leaf_ = TreeNode::kNull;
   root_scores_.clear();
@@ -226,18 +223,12 @@ void AI::try_piece(const BeamNode &parent, PieceType piece,
     BoardBitset board = parent.state.board;
     board.place(m.type, m.rotation, m.x, m.y);
 
-    // Goal check on pre-clear board (e.g. checkpoint with filled rows)
+    int cleared = board.clear_lines();
+
     SearchState cs;
     cs.board = board;
     cs.used_counts = parent.state.used_counts;
     cs.used_counts[static_cast<int>(piece)]++;
-    bool is_goal = eval_->is_goal(cs);
-
-    int cleared = board.clear_lines();
-    if (!is_goal && cleared > 0) {
-      cs.board = board;
-      is_goal = eval_->is_goal(cs);
-    }
 
     AttackState atk_state = parent.state.attack;
     int atk = compute_attack_and_update_state(atk_state, cleared, m.spin);
@@ -271,7 +262,7 @@ void AI::try_piece(const BeamNode &parent, PieceType piece,
     tn.next_sibling = arena_[parent.tree_idx].first_child;
     arena_[parent.tree_idx].first_child = ci;
     arena_[parent.tree_idx].child_count++;
-    tn.flags = is_goal ? TreeNode::kGoal : 0;
+    tn.flags = 0;
     tn.hold_used = hold_used_at_root;
     tn.lines_cleared = static_cast<int8_t>(cleared);
     tn.attack = static_cast<int8_t>(atk);
@@ -279,10 +270,9 @@ void AI::try_piece(const BeamNode &parent, PieceType piece,
 
     float child_bag_weight = parent.bag_weight * bag_weight;
     float eff_score = total * child_bag_weight;
-    if (eff_score > best_score_ || (is_goal && !goal_found_)) {
+    if (eff_score > best_score_) {
       best_score_ = eff_score;
       best_leaf_ = ci;
-      goal_found_ = goal_found_ || is_goal;
     }
 
     // Beam node — propagate root move identity for root_scores tracking
@@ -427,9 +417,10 @@ void AI::expand_one_depth(std::span<const PieceType> queue) {
   if ((int)next_beam_.size() > config_.beam_width)
     next_beam_.resize(config_.beam_width);
 
-  // Collect root-level scores on first depth.
-  // next_beam_ is already sorted by score desc, so first hit per move wins.
-  if (search_depth_ == 0) {
+  // Collect best score per root move — updated every depth so that
+  // root_scores_ always reflects the best descendant, not just depth-1.
+  // next_beam_ is sorted by score desc, so first hit per move wins.
+  {
     root_scores_.clear();
     std::unordered_set<uint64_t> seen;
     for (auto &n : next_beam_) {
@@ -488,7 +479,7 @@ void AI::run_search(std::span<const PieceType> queue,
 
   for (int d = 0; d < config_.max_depth && !beam_.empty(); ++d) {
     expand_one_depth(queue);
-    if (goal_found_ || cancel.load(std::memory_order_relaxed))
+    if (cancel.load(std::memory_order_relaxed))
       break;
   }
 }

@@ -3,6 +3,7 @@
 #include "controller/ai_controller.h"
 #include "controller/player_controller.h"
 #include "controller/tool_controller.h"
+#include "presets/opener.h"
 #include "ui/game_ui.h"
 
 
@@ -22,6 +23,9 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
                          std::unique_ptr<GameMode> mode)
     : renderer_(renderer), window_(window), settings_(settings),
       mode_(std::move(mode)) {
+  if (auto *opener = dynamic_cast<OpenerMode *>(mode_.get()))
+    opener->bind_ai(ai_state_);
+
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
@@ -59,6 +63,9 @@ void GameManager::reset() {
     ai_state_.rebuild_ai();
     ai_state_.needs_search = true;
   }
+
+  if (auto *opener = dynamic_cast<OpenerMode *>(mode_.get()))
+    opener->bind_ai(ai_state_);
 
   Board board;
   mode_->setup_board(board);
@@ -189,7 +196,11 @@ void GameManager::process_engine_events(TimePoint now,
 
     bool undo = stats_.process_event(ev, now);
 
-    if (ai_state_.active) {
+    // OpenerMode manages ai_state_ directly via on_piece_locked —
+    // skip generic AI handler to avoid double-advancing the plan.
+    bool opener_manages_ai = dynamic_cast<OpenerMode *>(mode_.get()) != nullptr;
+
+    if (ai_state_.active && !opener_manages_ai) {
       if (auto *pl = std::get_if<eng::PieceLocked>(&ev))
         ai_state_.on_piece_locked(*pl);
       else if (std::holds_alternative<eng::UndoPerformed>(ev) ||

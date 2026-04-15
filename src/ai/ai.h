@@ -1,6 +1,6 @@
 #pragma once
 
-#include "eval.h"
+#include "eval/eval.h"
 #include "placement.h"
 #include <atomic>
 #include <memory>
@@ -10,7 +10,7 @@
 struct AIConfig {
   int beam_width = 800;
   int max_depth = 14;
-  float futility_delta = 15.0f;
+  float futility_delta = 50.0f;
   bool sonic_only = true;
   bool extend_queue_7bag = true;
   int quiescence_max = 3;
@@ -21,7 +21,6 @@ struct AIConfig {
 struct SearchProgress {
   int depth;
   float best_score;
-  bool goal_found;
 };
 
 struct SearchResult {
@@ -57,7 +56,6 @@ struct TreeNode {
 
   static constexpr uint8_t kExpanded = 1;
   static constexpr uint8_t kPruned = 2;
-  static constexpr uint8_t kGoal = 4;
   static constexpr uint32_t kNull = UINT32_MAX;
 };
 
@@ -158,7 +156,6 @@ private:
   std::vector<BeamNode> beam_;
   std::vector<BeamNode> next_beam_;
   int search_depth_ = 0;
-  bool goal_found_ = false;
   float best_score_ = -1e18f;
 
   // Best result tracking
