@@ -9,10 +9,19 @@ project(citris LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT EMSCRIPTEN)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+endif()
+
+set(CMAKE_CXX_FLAGS_DEBUG "-O2 -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
 if(EMSCRIPTEN)
+  # Enable pthreads globally so FetchContent deps (SDL3, etc.) are built with atomics
+  add_compile_options(-pthread)
+
   # --- Emscripten: fetch dependencies instead of vcpkg ---
   include(FetchContent)
 
@@ -83,6 +92,7 @@ file(GLOB LIB_SOURCES
   "src/render/*.cc"
   "src/presets/*.cc"
   "src/ui/*.cc"
+  "src/ai/*.cc"
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
@@ -93,15 +103,27 @@ target_include_directories(tetris_lib PUBLIC
   src/controller
   src/render
   src/presets
+  src/ai
   "${CMAKE_BINARY_DIR}/generated"
 )
 target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui)
+if(NOT EMSCRIPTEN)
+  target_link_libraries(tetris_lib PUBLIC Threads::Threads)
+endif()
 add_dependencies(tetris_lib embed_font)
 
 if(EMSCRIPTEN)
   # Main executable — no WIN32/MACOSX_BUNDLE for WASM
   add_executable(citris src/main.cc)
   target_link_libraries(citris PRIVATE tetris_lib)
+
+  # Copy coi-serviceworker.js into build dir (needed for SharedArrayBuffer headers)
+  add_custom_command(TARGET citris POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+      "${CMAKE_SOURCE_DIR}/web/coi-serviceworker.js"
+      "$<TARGET_FILE_DIR:citris>/coi-serviceworker.js"
+    COMMENT "Copying coi-serviceworker.js into build dir"
+  )
 
   # Emscripten linker flags — use LINK_FLAGS to avoid CMake de-duplicating/merging args
   set_target_properties(citris PROPERTIES
@@ -111,6 +133,8 @@ if(EMSCRIPTEN)
       -sASYNCIFY_STACK_SIZE=65536 \
       -sALLOW_MEMORY_GROWTH=1 \
       -sUSE_SDL=0 \
+      -pthread \
+      -sPTHREAD_POOL_SIZE=2 \
       --preload-file ${CMAKE_SOURCE_DIR}/assets@/assets \
       --preload-file ${CMAKE_SOURCE_DIR}/assets/default_settings.ini@/settings.ini \
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html \

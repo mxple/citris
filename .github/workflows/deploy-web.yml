@@ -42,6 +42,7 @@ jobs:
           cp build-web/citris.wasm _site/
           cp build-web/citris.data _site/ 2>/dev/null || true
           cp build-web/citris.worker.js _site/ 2>/dev/null || true
+          cp web/coi-serviceworker.js _site/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
