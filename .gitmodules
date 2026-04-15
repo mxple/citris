@@ -1,6 +1,0 @@
-[submodule "cold-clear"]
-	path = cold-clear
-	url = https://github.com/MinusKelvin/cold-clear
-[submodule "fusion"]
-	path = fusion
-	url = https://github.com/mochbot/fusion
