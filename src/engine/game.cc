@@ -79,6 +79,7 @@ GameState Game::state() const {
       .game_over = game_over_,
       .won = won_,
       .piece_gen = piece_gen_,
+      .bag_draws = bag_->draws(),
       .lines_cleared = lines_cleared_,
       .total_attack = total_attack_,
       .last_clear = last_clear_,
@@ -154,6 +155,35 @@ void Game::handle_move(const cmd::MovePiece &e) {
     current_piece_ = compute_ghost();
     lock_piece();
     dirty_ = true;
+    break;
+  }
+  case Input::LLeft:
+  case Input::RRight: {
+    int dx = (e.input == Input::LLeft) ? -1 : 1;
+    int start_x = current_piece_.x;
+    while (true) {
+      current_piece_.x += dx;
+      if (board_.collides(current_piece_)) {
+        current_piece_.x -= dx;
+        break;
+      }
+    }
+    if (current_piece_.x != start_x) {
+      dirty_ = true;
+      last_move_was_rotation_ = false;
+      apply_sonic_drop();
+      post_move_timers();
+    }
+    break;
+  }
+  case Input::SonicDrop: {
+    Piece ghost = compute_ghost();
+    if (ghost.y != current_piece_.y) {
+      current_piece_.y = ghost.y;
+      dirty_ = true;
+      last_move_was_rotation_ = false;
+      post_move_timers();
+    }
     break;
   }
   case Input::Hold: {
@@ -267,6 +297,9 @@ void Game::lock_piece() {
     spin = board_.detect_spin(current_piece_);
 
   auto locked_type = current_piece_.type;
+  auto locked_rot = current_piece_.rotation;
+  auto locked_x = static_cast<int8_t>(current_piece_.x);
+  auto locked_y = static_cast<int8_t>(current_piece_.y);
   board_.place(current_piece_);
 
   int cleared = board_.clear_lines();
@@ -287,7 +320,8 @@ void Game::lock_piece() {
   }
 
   pending_events_.push_back(
-      eng::PieceLocked{locked_type, cleared, spin, pc, attack, prev_combo,
+      eng::PieceLocked{locked_type, locked_rot, locked_x, locked_y,
+                       cleared, spin, pc, attack, prev_combo,
                        attack_state_.combo, attack_state_.b2b});
 
   hold_available_ = true;

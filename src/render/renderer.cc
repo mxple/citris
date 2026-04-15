@@ -94,7 +94,8 @@ void Renderer::load_skin() {
   }
 }
 
-SDL_Texture *Renderer::draw_scene_to_texture(const GameState &state) {
+SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
+  const auto &state = vm.state;
   constexpr int kTile = L::kTileSize; // 30
   constexpr int kTargetW = L::kSceneCols * kTile;
   constexpr int kTargetH = L::kSceneRows * kTile;
@@ -135,8 +136,12 @@ SDL_Texture *Renderer::draw_scene_to_texture(const GameState &state) {
   draw_board_border();
   draw_gridlines();
 
-  // Content: board cells, ghost, active piece, hold, preview.
+  // Content: board cells, checkpoint overlay, plan overlay, ghost, active piece.
   draw_board(state.board);
+  // if (vm.checkpoint_overlay)
+  //   draw_checkpoint_overlay(*vm.checkpoint_overlay);
+  if (!vm.plan_overlay.empty())
+    draw_plan_overlay(vm.plan_overlay);
   draw_ghost(state.ghost_piece);
   draw_piece(state.current_piece);
   if (state.hold_piece) {
@@ -290,4 +295,40 @@ void Renderer::draw_tile(float x, float y, int tile_idx, Color tint) {
 void Renderer::draw_solid(const SDL_FRect &dst, Color color) {
   SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
   SDL_RenderFillRect(renderer_, &dst);
+}
+
+void Renderer::draw_plan_overlay(
+    const std::vector<PlannedPlacement> &placements) {
+  constexpr float t = L::kTileSize;
+  for (auto &pp : placements) {
+    int skin = piece_to_skin(pp.type);
+    auto alpha = static_cast<uint8_t>(std::clamp(pp.alpha * 180.f, 0.f, 255.f));
+    Color tint(255, 255, 255, alpha);
+    for (auto &cell : pp.cells) {
+      if (cell.y < 0 || cell.y >= L::kPlayRows + L::kPadRowsNorth)
+        continue;
+      if (cell.x < 0 || cell.x >= L::kBoardCols)
+        continue;
+      float px = (L::kBoardColX + cell.x) * t;
+      float py = row_px(cell.y);
+      draw_tile(px, py, skin, tint);
+    }
+  }
+}
+
+void Renderer::draw_checkpoint_overlay(const CheckpointOverlay &overlay) {
+  constexpr float t = L::kTileSize;
+  auto alpha = static_cast<uint8_t>(
+      std::clamp(overlay.alpha * 255.f, 0.f, 255.f));
+  Color color(100, 180, 255, alpha);
+  for (int y = 0; y < static_cast<int>(overlay.rows.size()); ++y) {
+    uint16_t row = overlay.rows[y];
+    for (int x = 0; x < L::kBoardCols; ++x) {
+      if ((row >> x) & 1) {
+        float px = (L::kBoardColX + x) * t;
+        float py = row_px(y);
+        draw_solid({px, py, t, t}, color);
+      }
+    }
+  }
 }

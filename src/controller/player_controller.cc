@@ -26,7 +26,8 @@ void PlayerController::update(const InputEvent &ev, TimePoint now,
       ev);
 }
 
-void PlayerController::check_timers(TimePoint now, CommandBuffer &cmds) {
+void PlayerController::check_timers(TimePoint now, const GameState &,
+                                    CommandBuffer &cmds) {
   // DAS timers
   for (int i = 0; i < 2; ++i) {
     if (das_deadline_[i] && now >= *das_deadline_[i]) {

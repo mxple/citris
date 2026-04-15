@@ -82,7 +82,7 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
   //    the game board.
   float scene_w = layout.cell_px * L::kSceneCols;
   float scene_h = layout.cell_px * L::kSceneRows;
-  SDL_Texture *scene = renderer.draw_scene_to_texture(vm.state);
+  SDL_Texture *scene = renderer.draw_scene_to_texture(vm);
   if (scene) {
     ImVec2 p_min(layout.origin_x, layout.origin_y);
     ImVec2 p_max(p_min.x + scene_w, p_min.y + scene_h);

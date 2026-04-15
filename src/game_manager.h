@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai_state.h"
 #include "command.h"
 #include "controller/controller.h"
 #include "engine/game.h"
@@ -13,6 +14,8 @@
 #include <memory>
 #include <vector>
 
+class AIController;
+
 class GameManager {
 public:
   GameManager(SDL_Renderer *renderer, SDL_Window *window,
@@ -23,6 +26,7 @@ public:
 private:
   void reset();
   void process_engine_events(TimePoint now, CommandBuffer &rule_cmds);
+  void pump_ai(TimePoint now, const GameState &state);
   void route_garbage(TimePoint now, CommandBuffer &cmds);
   ViewModel build_view_model(TimePoint now);
 
@@ -38,6 +42,10 @@ private:
   std::unique_ptr<Game> game_;
   std::vector<std::unique_ptr<IController>> controllers_;
   std::unique_ptr<Renderer> game_renderer_;
+
+  // AI
+  AIState ai_state_;
+  AIController *ai_controller_ = nullptr; // owned by controllers_
 
   // Multiplayer (partial)
   std::unique_ptr<Game> game2_;

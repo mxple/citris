@@ -10,7 +10,10 @@ enum class GameInput {
   Rotate180,
   SoftDrop,
   HardDrop,
-  Hold
+  Hold,
+  LLeft,     // slide to left wall
+  RRight,    // slide to right wall
+  SonicDrop  // drop to lowest valid Y without locking
 };
 using Input = GameInput;
 

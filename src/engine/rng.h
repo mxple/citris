@@ -17,6 +17,7 @@ public:
     }
     auto result = queue_.front();
     queue_.pop_front();
+    draws_++;
     return result;
   }
 
@@ -29,15 +30,19 @@ public:
     return {queue_.begin(), queue_.begin() + count};
   }
 
+  int draws() const { return draws_; }
+
   struct BagSnapshot {
     std::mt19937 rng;
     std::deque<PieceType> queue;
+    int draws;
   };
 
-  BagSnapshot snapshot() const { return {rng_, queue_}; }
+  BagSnapshot snapshot() const { return {rng_, queue_, draws_}; }
   void restore(const BagSnapshot &snap) {
     rng_ = snap.rng;
     queue_ = snap.queue;
+    draws_ = snap.draws;
   }
 
 protected:
@@ -47,6 +52,7 @@ protected:
 
   std::mt19937 rng_;
   std::deque<PieceType> queue_;
+  int draws_ = 0;
 };
 
 class SevenBagRandomizer : public BagRandomizer {

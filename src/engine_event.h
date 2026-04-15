@@ -10,6 +10,8 @@
 namespace eng {
 struct PieceLocked {
   PieceType type;
+  Rotation rotation;
+  int8_t x, y;
   int lines_cleared;
   SpinKind spin;
   bool perfect_clear;

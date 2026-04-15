@@ -25,6 +25,7 @@ struct GameState {
   bool game_over = false;
   bool won = false;
   int piece_gen = 0; // incremented on spawn/hold
+  int bag_draws = 0; // incremented only on spawn (= bag next() calls)
   int lines_cleared = 0;
   int total_attack = 0;
   LastClear last_clear;

@@ -40,10 +40,12 @@ public:
   // Event subscribers
   virtual void on_piece_locked(const eng::PieceLocked &, const GameState &,
                                CommandBuffer &) {}
+  virtual void on_undo(const GameState &) {}
   virtual void on_tick(TimePoint, const GameState &, CommandBuffer &) {}
 
   // View model population
   virtual void fill_hud(HudData &, const GameState &, TimePoint) {}
+  virtual void fill_plan_overlay(ViewModel &, const GameState &) {}
 
 protected:
   TimePoint start_time_;

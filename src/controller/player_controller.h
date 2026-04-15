@@ -11,7 +11,8 @@ public:
 
   void update(const InputEvent &ev, TimePoint now, const GameState &state,
               CommandBuffer &cmds) override;
-  void check_timers(TimePoint now, CommandBuffer &cmds) override;
+  void check_timers(TimePoint now, const GameState &state,
+                    CommandBuffer &cmds) override;
   std::optional<TimePoint> next_deadline() const override;
   void reset_input_state() override;
   void notify(const EngineEvent &ev, TimePoint now) override;
