@@ -100,7 +100,6 @@ public:
     auto &cp = opener_.nodes[targets[0]].checkpoint;
     CheckpointOverlay co;
     co.rows = cp.rows;
-    co.alpha = 0.15f;
     vm.checkpoint_overlay = std::move(co);
 
     if (ai_->plan.complete())

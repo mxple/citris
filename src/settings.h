@@ -40,6 +40,9 @@ struct Settings {
   KeyCode soft_drop = SDLK_DOWN;
   KeyCode hold = SDLK_C;
   KeyCode undo = SDLK_U;
+  KeyCode reset_game = SDLK_GRAVE;
+  KeyCode exit_to_menu = SDLK_BACKSPACE;
+  KeyCode debug_menu = SDLK_F3;
 
   // Input tuning
   std::chrono::milliseconds das{110};
@@ -57,6 +60,9 @@ struct Settings {
   // Ghost piece rendering
   bool colored_ghost = true;
   uint8_t ghost_opacity = 100;
+
+  // Plan overlay max alpha (0–255); default matches the old hardcoded 180
+  uint8_t plan_opacity = 180;
 
   // Linear filtering for skin/board textures (vs pixel-perfect nearest)
   bool antialiasing = false;

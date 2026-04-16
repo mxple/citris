@@ -130,9 +130,9 @@ run_start:
         return running_;
       }
       if (auto *kd = std::get_if<KeyDown>(&iev)) {
-        if (kd->key == SDLK_BACKSPACE) {
+        if (kd->key == settings_.exit_to_menu) {
           return running_;
-        } else if (kd->key == SDLK_GRAVE) {
+        } else if (kd->key == settings_.reset_game) {
           reset();
           goto run_start;
         }

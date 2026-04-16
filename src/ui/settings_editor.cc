@@ -53,6 +53,7 @@ void SettingsEditor::sync_from_settings() {
   hard_drop_delay_ms_ =
       static_cast<int>(settings_.game.hard_drop_delay.count());
   ghost_opacity_pct_ = settings_.ghost_opacity * 100 / 255;
+  plan_opacity_pct_ = settings_.plan_opacity * 100 / 255;
   grid_opacity_pct_ = settings_.grid_opacity * 100 / 255;
   scale_pct_ = static_cast<int>(settings_.scale_factor * 100.f + 0.5f);
 }
@@ -103,6 +104,7 @@ struct Binding {
 // SDL_Keycode for keys where SDL_GetKeyFromName(ImGui::GetKeyName()) fails.
 SDL_Keycode imgui_key_to_sdl(ImGuiKey k) {
   switch (k) {
+  // Modifier keys: SDL uses separate left/right names, ImGui doesn't.
   case ImGuiKey_LeftShift:    return SDLK_LSHIFT;
   case ImGuiKey_RightShift:   return SDLK_RSHIFT;
   case ImGuiKey_LeftCtrl:     return SDLK_LCTRL;
@@ -111,6 +113,19 @@ SDL_Keycode imgui_key_to_sdl(ImGuiKey k) {
   case ImGuiKey_RightAlt:     return SDLK_RALT;
   case ImGuiKey_LeftSuper:    return SDLK_LGUI;
   case ImGuiKey_RightSuper:   return SDLK_RGUI;
+  // Punctuation: ImGui uses full English names, SDL_GetKeyFromName expects
+  // the single character string (e.g. "`" not "GraveAccent").
+  case ImGuiKey_GraveAccent:  return SDLK_GRAVE;
+  case ImGuiKey_Apostrophe:   return SDLK_APOSTROPHE;
+  case ImGuiKey_Semicolon:    return SDLK_SEMICOLON;
+  case ImGuiKey_LeftBracket:  return SDLK_LEFTBRACKET;
+  case ImGuiKey_RightBracket: return SDLK_RIGHTBRACKET;
+  case ImGuiKey_Backslash:    return SDLK_BACKSLASH;
+  case ImGuiKey_Comma:        return SDLK_COMMA;
+  case ImGuiKey_Period:       return SDLK_PERIOD;
+  case ImGuiKey_Slash:        return SDLK_SLASH;
+  case ImGuiKey_Minus:        return SDLK_MINUS;
+  case ImGuiKey_Equal:        return SDLK_EQUALS;
   default:                    return SDLK_UNKNOWN;
   }
 }
@@ -127,20 +142,17 @@ void SettingsEditor::draw() {
       {"Soft Drop", &settings_.soft_drop},
       {"Hold", &settings_.hold},
       {"Undo", &settings_.undo},
+      {"Reset Game", &settings_.reset_game},
+      {"Exit to Menu", &settings_.exit_to_menu},
+      {"Debug Menu", &settings_.debug_menu},
   };
   constexpr int kBindingCount = sizeof(bindings) / sizeof(bindings[0]);
 
   // --- Keybind capture ---
-  // If capturing, grab the next pressed non-modifier key from ImGui's input
-  // queue and assign it, then stop capturing.
+  // If capturing, grab the next pressed key (any key, including Escape) and
+  // assign it, then stop capturing. Click the active button again to cancel.
   if (capturing_ >= 0 && capturing_ < kBindingCount) {
-    ImGuiIO &io = ImGui::GetIO();
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-      capturing_ = -1;
-    } else {
-      for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
-        if (k == ImGuiKey_Escape)
-          continue;
+    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
         if (ImGui::IsKeyPressed((ImGuiKey)k, false)) {
           // Map ImGuiKey back to SDL_Keycode — try direct table first,
           // then fall back to string name lookup.
@@ -155,7 +167,6 @@ void SettingsEditor::draw() {
           capturing_ = -1;
           break;
         }
-      }
     }
   } else if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
     sync_from_settings();
@@ -210,7 +221,7 @@ void SettingsEditor::draw() {
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%s##kb", key_label.c_str());
     if (ImGui::Button(buf, ImVec2(kWidgetW, 0)))
-      capturing_ = i;
+      capturing_ = (capturing_ == i) ? -1 : i;
     ImGui::PopID();
   }
 
@@ -256,6 +267,7 @@ void SettingsEditor::draw() {
   bool_row("Antialiasing", &settings_.antialiasing);
   bool_row("Colored Ghost", &settings_.colored_ghost);
   slider_row("Ghost Opacity %", &ghost_opacity_pct_, 0, 100);
+  slider_row("Plan Opacity %", &plan_opacity_pct_, 0, 100);
   slider_row("Grid Opacity %", &grid_opacity_pct_, 0, 100);
 
   // Row with an "Infinite" checkbox; when unchecked an InputInt slides in.
@@ -311,6 +323,8 @@ void SettingsEditor::save_settings() {
       std::chrono::milliseconds(std::max(0, hard_drop_delay_ms_));
   settings_.ghost_opacity =
       static_cast<uint8_t>(std::clamp(ghost_opacity_pct_, 0, 100) * 255 / 100);
+  settings_.plan_opacity =
+      static_cast<uint8_t>(std::clamp(plan_opacity_pct_, 0, 100) * 255 / 100);
   settings_.grid_opacity =
       static_cast<uint8_t>(std::clamp(grid_opacity_pct_, 0, 100) * 255 / 100);
   settings_.scale_factor =

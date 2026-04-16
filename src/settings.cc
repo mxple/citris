@@ -220,7 +220,13 @@ bool Settings::load(const std::string &path) {
         skin_path = val;
       else if (key == "colored_ghost")
         ok = parse_bool(val, colored_ghost);
-      else if (key == "ghost_opacity") {
+      else if (key == "plan_opacity") {
+        int pct;
+        ok = parse_int(val, pct);
+        if (ok)
+          plan_opacity =
+              static_cast<uint8_t>(std::clamp(pct, 0, 100) * 255 / 100);
+      } else if (key == "ghost_opacity") {
         int pct;
         ok = parse_int(val, pct);
         if (ok)
@@ -271,6 +277,12 @@ bool Settings::load(const std::string &path) {
         ok = parse_key(val, hold);
       else if (key == "undo")
         ok = parse_key(val, undo);
+      else if (key == "reset_game")
+        ok = parse_key(val, reset_game);
+      else if (key == "exit_to_menu")
+        ok = parse_key(val, exit_to_menu);
+      else if (key == "debug_menu")
+        ok = parse_key(val, debug_menu);
       else
         ok = false;
     } else if (section == "tuning") {
@@ -329,6 +341,7 @@ bool Settings::save(const std::string &path) const {
   file << "skin = " << rel_skin << "\n";
   file << "colored_ghost = " << (colored_ghost ? "true" : "false") << "\n";
   file << "ghost_opacity = " << opacity_pct(ghost_opacity) << "\n";
+  file << "plan_opacity = " << opacity_pct(plan_opacity) << "\n";
   file << "board_opacity = " << opacity_pct(board_opacity) << "\n";
   file << "grid_opacity = " << opacity_pct(grid_opacity) << "\n";
   file << "scale_factor = " << scale_factor << "\n";
@@ -346,6 +359,9 @@ bool Settings::save(const std::string &path) const {
   file << "soft_drop = " << ks(soft_drop) << "\n";
   file << "hold = " << ks(hold) << "\n";
   file << "undo = " << ks(undo) << "\n";
+  file << "reset_game = " << ks(reset_game) << "\n";
+  file << "exit_to_menu = " << ks(exit_to_menu) << "\n";
+  file << "debug_menu = " << ks(debug_menu) << "\n";
   file << "\n";
 
   file << "[tuning]\n";

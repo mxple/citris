@@ -27,14 +27,12 @@ struct HudData {
 struct PlannedPlacement {
   std::array<Vec2, 4> cells;   // absolute board coordinates (adjusted for prior clears)
   PieceType type;
-  float alpha = 0.20f;
   int step_number = 0;
 };
 
 // Target checkpoint silhouette rendered as a dim board overlay.
 struct CheckpointOverlay {
   std::vector<uint16_t> rows;  // bitmask per row (10 bits)
-  float alpha = 0.05f;
 };
 
 struct ViewModel {

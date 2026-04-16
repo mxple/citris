@@ -39,7 +39,7 @@ private:
   bool gravity_infinite_, lock_delay_infinite_;
 
   // Adapter ints for opacity (0-100 percentage)
-  int ghost_opacity_pct_, grid_opacity_pct_;
+  int ghost_opacity_pct_, plan_opacity_pct_, grid_opacity_pct_;
 
   // Scale factor as percent
   int scale_pct_;

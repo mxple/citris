@@ -302,7 +302,7 @@ void Renderer::draw_plan_overlay(
   constexpr float t = L::kTileSize;
   for (auto &pp : placements) {
     int skin = piece_to_skin(pp.type);
-    auto alpha = static_cast<uint8_t>(std::clamp(pp.alpha * 180.f, 0.f, 255.f));
+    auto alpha = static_cast<uint8_t>(settings_.plan_opacity);
     Color tint(255, 255, 255, alpha);
     for (auto &cell : pp.cells) {
       if (cell.y < 0 || cell.y >= L::kPlayRows + L::kPadRowsNorth)
@@ -318,8 +318,9 @@ void Renderer::draw_plan_overlay(
 
 void Renderer::draw_checkpoint_overlay(const CheckpointOverlay &overlay) {
   constexpr float t = L::kTileSize;
+  // TODO make this configurable or remove
   auto alpha = static_cast<uint8_t>(
-      std::clamp(overlay.alpha * 255.f, 0.f, 255.f));
+      std::clamp(255.f, 0.f, 255.f));
   Color color(100, 180, 255, alpha);
   for (int y = 0; y < static_cast<int>(overlay.rows.size()); ++y) {
     uint16_t row = overlay.rows[y];
