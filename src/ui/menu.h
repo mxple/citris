@@ -16,7 +16,7 @@ public:
   std::unique_ptr<GameMode> run();
 
 private:
-  enum class Screen { Main, PresetSelect, Settings, OpenerSelect };
+  enum class Screen { Main, PresetSelect, Settings, OpenerSelect, UserModeSelect };
 
   std::unique_ptr<GameMode> make_selected_mode(int index);
 
@@ -27,4 +27,5 @@ private:
   Screen screen_ = Screen::Main;
   std::vector<std::unique_ptr<GameMode>> modes_;
   std::vector<Opener> openers_;
+  std::vector<std::unique_ptr<GameMode>> user_modes_;
 };

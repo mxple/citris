@@ -222,8 +222,7 @@ bool UserMode::goals_met(const GameState &state) const {
 std::optional<GeneratedSetup> UserMode::generate(std::mt19937 &rng) {
   Board board = generate_board(rng);
   std::vector<PieceType> queue = generate_queue(rng);
-  if (config_.validation != UserModeConfig::Validation::None &&
-      !validate_setup(board, queue))
+  if (config_.needs_validation() && !validate_setup(board, queue))
     return std::nullopt;
   return GeneratedSetup{std::move(board), std::move(queue)};
 }
