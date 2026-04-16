@@ -5,7 +5,7 @@
 #include "command.h"
 #include "engine_event.h"
 #include "game_state.h"
-#include "rng.h"
+#include "engine/bag.h"
 #include <deque>
 #include <optional>
 #include <vector>
