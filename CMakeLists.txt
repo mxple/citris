@@ -93,6 +93,7 @@ file(GLOB LIB_SOURCES
   "src/presets/*.cc"
   "src/ui/*.cc"
   "src/ai/*.cc"
+  "src/ai/pc/*.cc"
   "src/ai/eval/*.cc"
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
@@ -105,6 +106,7 @@ target_include_directories(tetris_lib PUBLIC
   src/render
   src/presets
   src/ai
+  src/ai/pc
   src/ai/eval
   "${CMAKE_BINARY_DIR}/generated"
 )
