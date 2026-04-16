@@ -163,6 +163,13 @@ run_start:
       process_engine_events(now, discard);
     }
 
+    // Auto-restart on win for training modes
+    if (game_->state().game_over && game_->state().won &&
+        mode_->auto_restart()) {
+      reset();
+      goto run_start;
+    }
+
     // 5. Render: ImGui frame + embedded board texture
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();

@@ -28,6 +28,7 @@ public:
   bool filled(int col, int row) const;
 
   CellColor cell_color(int col, int row) const { return cells_[row][col]; }
+  void set_cell(int col, int row, CellColor color) { cells_[row][col] = color; }
   bool is_empty() const;
 
 private:

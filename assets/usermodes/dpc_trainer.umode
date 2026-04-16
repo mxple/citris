@@ -1,0 +1,15 @@
+[meta]
+name = DPC Trainer
+description = Practice first-bag perfect clears with a modified 8-piece bag
+
+[queue]
+initial = S
+continuation = 7bag
+count = 20
+
+[board]
+type = empty
+
+[goal]
+use_all_queue = true
+pc = 1

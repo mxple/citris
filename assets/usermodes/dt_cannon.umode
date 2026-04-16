@@ -1,0 +1,23 @@
+[meta]
+name = Midgame DT Cannon Trainer
+description = Practice DT cannon: achieve TSD + TST with clean board
+
+[queue]
+initial = none
+continuation = 7bag
+count = 14
+
+[board]
+type = generated
+
+[board.generated]
+max_height = 8
+bumpiness = 3
+sparseness = 2
+allow_holes = 1
+
+[goal]
+use_all_queue = true
+tsd = 1
+tst = 1
+max_overhangs = 1

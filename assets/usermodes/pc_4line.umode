@@ -1,0 +1,15 @@
+[meta]
+name = PC Practice (4L)
+description = Clear the board with 10 pieces from a standard 7-bag
+
+[queue]
+initial = none
+continuation = 7bag
+count = 10
+
+[board]
+type = empty
+
+[goal]
+use_all_queue = true
+pc = 1

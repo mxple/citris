@@ -23,11 +23,16 @@ public:
 
   // Peek at upcoming pieces (for preview queue display).
   // Returns up to count pieces without consuming them.
+  // May return fewer than count if queue is finite and nearly exhausted.
   std::vector<PieceType> preview(int count) {
-    while (queue_.size() < count) {
+    while (static_cast<int>(queue_.size()) < count) {
+      auto old_size = queue_.size();
       refill();
+      if (queue_.size() == old_size)
+        break; // finite queue — refill can't produce more
     }
-    return {queue_.begin(), queue_.begin() + count};
+    auto n = std::min(static_cast<int>(queue_.size()), count);
+    return {queue_.begin(), queue_.begin() + n};
   }
 
   int draws() const { return draws_; }
@@ -86,6 +91,17 @@ public:
 
 private:
   void refill() override {} // intentionally empty — finite queue
+};
+
+// Fixed prefix followed by standard 7-bag. Used for training modes
+// with an initial queue that transitions into random play.
+class PrefixedBagRandomizer : public SevenBagRandomizer {
+public:
+  PrefixedBagRandomizer(std::vector<PieceType> prefix, unsigned seed)
+      : SevenBagRandomizer(seed) {
+    for (auto it = prefix.rbegin(); it != prefix.rend(); ++it)
+      queue_.push_front(*it);
+  }
 };
 
 class TrueRandomizer : public BagRandomizer {
