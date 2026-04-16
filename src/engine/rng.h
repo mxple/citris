@@ -73,6 +73,21 @@ private:
   }
 };
 
+// Plays a fixed sequence of pieces, then stops (no refill).
+// Used by training modes for finite queues.
+class FixedQueueRandomizer : public BagRandomizer {
+public:
+  explicit FixedQueueRandomizer(std::vector<PieceType> pieces,
+                                unsigned seed = 0)
+      : BagRandomizer(seed) {
+    for (auto p : pieces)
+      queue_.push_back(p);
+  }
+
+private:
+  void refill() override {} // intentionally empty — finite queue
+};
+
 class TrueRandomizer : public BagRandomizer {
 public:
   using BagRandomizer::BagRandomizer;

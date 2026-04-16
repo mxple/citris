@@ -2,7 +2,6 @@
 
 #include "checkpoint.h"
 #include "eval.h"
-#include <cstdio>
 #include <vector>
 
 struct OpenerWeights {

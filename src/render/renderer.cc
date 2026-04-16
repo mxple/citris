@@ -147,7 +147,7 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
   if (state.hold_piece) {
     draw_mini_piece(*state.hold_piece, !state.hold_available, L::kHoldColX, 17);
   }
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < state.preview.size() && i < 5; i++) {
     draw_mini_piece(state.preview[i], false, L::kNextColX, 17 - 3 * i);
   }
 

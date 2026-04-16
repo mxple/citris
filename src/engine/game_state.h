@@ -3,8 +3,8 @@
 #include "attack.h"
 #include "board.h"
 #include "piece.h"
-#include <array>
 #include <optional>
+#include <vector>
 
 struct LastClear {
   int lines = 0;
@@ -20,7 +20,7 @@ struct GameState {
   Piece ghost_piece{PieceType::I};
   std::optional<PieceType> hold_piece;
   bool hold_available = true;
-  std::array<PieceType, 6> preview;
+  std::vector<PieceType> preview;
   AttackState attack_state;
   bool game_over = false;
   bool won = false;

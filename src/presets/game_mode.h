@@ -3,8 +3,10 @@
 #include "command.h"
 #include "engine_event.h"
 #include "engine/game_state.h"
+#include "engine/rng.h"
 #include "render/view_model.h"
 #include <chrono>
+#include <memory>
 #include <string>
 
 class Board;
@@ -34,6 +36,10 @@ public:
   virtual bool hold_allowed() const { return true; }
   virtual bool undo_allowed() const { return true; }
   virtual std::optional<EvalType> default_eval_type() const { return std::nullopt; }
+  virtual std::unique_ptr<BagRandomizer> create_bag(unsigned seed) const {
+    return std::make_unique<SevenBagRandomizer>(seed);
+  }
+  virtual bool auto_restart() const { return false; }
 
   // Lifecycle
   virtual void on_start(TimePoint now) { start_time_ = now; end_time_.reset(); }

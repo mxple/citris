@@ -4,7 +4,7 @@
 
 Game::Game(const GameMode &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)) {
-  bag_ = std::make_unique<SevenBagRandomizer>(seed);
+  bag_ = mode_.create_bag(seed);
   now_ = SdlClock::now();
   spawn_piece();
 }
@@ -63,18 +63,13 @@ void Game::tick(TimePoint now) {
 }
 
 GameState Game::state() const {
-  auto pv = bag_->preview(6);
-  std::array<PieceType, 6> preview_arr{};
-  std::copy_n(pv.begin(), std::min(pv.size(), preview_arr.size()),
-              preview_arr.begin());
-
   return GameState{
       .board = board_,
       .current_piece = current_piece_,
       .ghost_piece = compute_ghost(),
       .hold_piece = hold_piece_,
       .hold_available = hold_available_,
-      .preview = preview_arr,
+      .preview = bag_->preview(6),
       .attack_state = attack_state_,
       .game_over = game_over_,
       .won = won_,
@@ -276,6 +271,9 @@ void Game::handle_undo() {
 }
 
 void Game::spawn_piece() {
+  if (bag_->preview(1).empty())
+    return; // finite queue exhausted — mode handles via on_piece_locked
+
   current_piece_ = Piece(bag_->next());
   piece_gen_++;
   lock_resets_remaining_ = mode_.max_lock_resets();
