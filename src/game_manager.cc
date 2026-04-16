@@ -5,13 +5,9 @@
 #include "controller/tool_controller.h"
 #include "ui/game_ui.h"
 
-
-
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
-
-#include <chrono>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -44,21 +40,21 @@ void GameManager::reset() {
   cmds_.clear();
 
   bool was_active = ai_state_.active;
-  auto eval_type = ai_state_.eval_type;
+  auto mode = ai_state_.mode;
+  auto overrides = ai_state_.overrides;
   bool was_autoplay = ai_state_.autoplay;
   int max_vis = ai_state_.max_visible;
   int interval = ai_state_.input_interval_ms;
 
-  ai_state_ = AIState{};
+  ai_state_.deactivate();
+  ai_state_.mode = mode;
+  ai_state_.overrides = overrides;
   ai_state_.active = was_active;
-  ai_state_.eval_type = eval_type;
   ai_state_.autoplay = was_autoplay;
   ai_state_.max_visible = max_vis;
   ai_state_.input_interval_ms = interval;
-  if (was_active) {
-    ai_state_.rebuild_ai();
+  if (was_active)
     ai_state_.needs_search = true;
-  }
 
   Board board;
   mode_->setup_board(board);
@@ -98,7 +94,7 @@ run_start:
       case SDL_EVENT_WINDOW_RESIZED:
         input_events.push_back(
             WindowResize{static_cast<unsigned>(ev.window.data1),
-                          static_cast<unsigned>(ev.window.data2)});
+                         static_cast<unsigned>(ev.window.data2)});
         break;
       case SDL_EVENT_KEY_DOWN:
         if (!ev.key.repeat && !io.WantCaptureKeyboard)
@@ -196,24 +192,16 @@ void GameManager::process_engine_events(TimePoint now,
 
     bool undo = stats_.process_event(ev, now);
 
-    if (auto *pl = std::get_if<eng::PieceLocked>(&ev))
-      ai_state_.on_piece_locked(*pl); // always advance plan; search gated inside
-    else if (ai_state_.active && (std::holds_alternative<eng::UndoPerformed>(ev) ||
-             std::holds_alternative<eng::GarbageMaterialized>(ev)))
-      ai_state_.needs_search = true;
-
     if (auto *pl = std::get_if<eng::PieceLocked>(&ev)) {
+      ai_state_.on_piece_locked(*pl);
       mode_->on_piece_locked(*pl, game_->state(), rule_cmds);
+    } else if (std::holds_alternative<eng::GarbageMaterialized>(ev)) {
+      ai_state_.on_garbage();
     } else if (undo) {
       for (auto &ctrl : controllers_)
         ctrl->reset_input_state();
       mode_->on_undo(game_->state());
-      if (ai_state_.active) {
-        ai_state_.search_task.reset();
-        ai_state_.plan = Plan{};
-        ai_state_.plan_computed = false;
-        ai_state_.needs_search = true;
-      }
+      ai_state_.on_undo();
     }
   }
 
@@ -232,10 +220,10 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
   }
 
   // Feed path to AIController when plan is ready and autoplay is on
-  if (ai_state_.autoplay && ai_state_.plan_computed &&
-      !ai_state_.plan.complete() && !ai_state_.searching() &&
+  if (ai_state_.autoplay && ai_state_.plan_computed() &&
+      !ai_state_.current_plan().complete() && !ai_state_.searching() &&
       ai_controller_->idle()) {
-    auto &step = *ai_state_.plan.current();
+    auto &step = *ai_state_.current_plan().current();
 
     std::vector<GameInput> path;
     if (step.uses_hold) {
@@ -250,8 +238,7 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
                        piece.rotation);
     }
 
-    ai_controller_->set_path(std::move(path), now,
-                             ai_state_.input_interval_ms);
+    ai_controller_->set_path(std::move(path), now, ai_state_.input_interval_ms);
   }
 }
 

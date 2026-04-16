@@ -1,177 +1,60 @@
 #pragma once
 
-#include "ai/ai.h"
-#include "ai/board_bitset.h"
+#include "ai/ai_mode.h"
+#include "ai/beam_search.h"
+#include "ai/pc/pc_solver.h"
 #include "ai/plan.h"
-#include "ai/eval/eval.h"
-#include "ai/eval/cheese.h"
-#include "ai/eval/sprint.h"
-#include "ai/eval/tsd.h"
-#include "ai/search_task.h"
 #include "engine/game_state.h"
 #include "engine_event.h"
-#include <functional>
-#include <optional>
+#include <memory>
 
-struct AIState {
+enum class PlanSource { None, BeamSearch, PerfectClear };
 
-  AI ai;
-  Plan plan;
-  std::unique_ptr<SearchTask> search_task;
-  std::vector<PieceType> queue;
-  BoardBitset search_board;
-
-  // Cached results (safe to read from main thread after poll_search returns true)
-  SearchResult last_result;
-  int last_depth = 0;
-
+class AIState {
+public:
+  // --- Config: mutable by UI ---
+  AIMode mode = AtkMode{};
+  BeamOverrides overrides;
   bool active = false;
-  bool plan_computed = false;
-  bool needs_search = false;
   bool autoplay = false;
-  EvalType eval_type = EvalType::Default;
-  int max_visible = 7;
+  bool needs_search = false;
   int input_interval_ms = 250;
+  int max_visible = 7;
 
-  // Custom evaluator override — when set, used instead of eval_type.
-  // Caller owns the factory lifetime.
-  std::function<std::unique_ptr<Evaluator>()> custom_evaluator;
-
-  // Config overrides (applied on next start_search if set)
-  std::optional<int> override_beam_width;
-  std::optional<int> override_max_depth;
-
-  bool searching() const { return search_task && !search_task->ready(); }
-
-  std::unique_ptr<Evaluator> make_evaluator() const {
-    if (custom_evaluator)
-      return custom_evaluator();
-
-    switch (eval_type) {
-    case EvalType::Tsd:
-      return std::make_unique<TsdEvaluator>();
-    case EvalType::Sprint:
-      return std::make_unique<SprintEvaluator>();
-    case EvalType::Cheese:
-      return std::make_unique<CheeseEvaluator>();
-    case EvalType::Default: {
-      struct DefaultEvaluator : Evaluator {
-        float board_eval(const BoardBitset &board) const override {
-          return board_eval_default(board, {});
-        }
-        float tactical_eval(const Placement &, int lines_cleared, int,
-                            const SearchState &) const override {
-          return static_cast<float>(lines_cleared) * 3.0f;
-        }
-        float composite(float board_score, float tactical_score,
-                        int) const override {
-          return board_score + tactical_score;
-        }
-        bool accumulate_tactical() const override { return true; }
-      };
-      return std::make_unique<DefaultEvaluator>();
-    }
-    }
-    return std::make_unique<TsdEvaluator>();
+  // --- Read-only queries ---
+  bool plan_computed() const;
+  bool searching() const;
+  PlanSource plan_source() const { return plan_source_; }
+  const Plan &current_plan() const { return plan_; }
+  float last_score() const { return last_score_; }
+  int last_depth() const { return last_depth_; }
+  const std::vector<std::pair<Placement, float>> &root_scores() const {
+    return last_root_scores_;
   }
+  std::unique_ptr<Evaluator> make_evaluator() const;
 
-  void rebuild_ai() {
-    search_task.reset();
-    ai = AI::builder()
-             .width(override_beam_width.value_or(800))
-             .depth(override_max_depth.value_or(12))
-             .sonic(true)
-             .extend_bag(true)
-             .evaluator(make_evaluator())
-             .build();
-  }
-
-  void start_search(const GameState &state) {
-    search_task.reset();
-
-    BoardBitset bb = BoardBitset::from_board(state.board);
-    queue.clear();
-    queue.push_back(state.current_piece.type);
-    for (auto &p : state.preview)
-      queue.push_back(p);
-
-    search_board = bb;
-    ai.set_evaluator(make_evaluator());
-
-    AIConfig cfg;
-    cfg.beam_width = override_beam_width.value_or(800);
-    cfg.max_depth = override_max_depth.value_or(
-        static_cast<int>(queue.size()));
-    cfg.sonic_only = true;
-    cfg.extend_queue_7bag = true;
-    ai.set_config(cfg);
-
-    SearchState root;
-    root.board = bb;
-    root.hold = state.hold_piece;
-    root.hold_available = state.hold_available;
-    root.bag_draws = state.bag_draws;
-    ai.reset(root);
-
-    search_task = std::make_unique<SearchTask>(ai, queue);
-    plan = Plan{};
-    plan_computed = false;
-  }
-
-  bool poll_search() {
-    if (!search_task || !search_task->ready())
-      return false;
-    search_task->join();
-    search_task.reset();
-    last_result = ai.result();
-    last_depth = ai.depth();
-    build_plan(last_result);
-    plan_computed = !last_result.pv.empty();
-    return true;
-  }
-
-  void on_piece_locked(const eng::PieceLocked &ev) {
-    if (plan_computed && !plan.complete() && plan.current()) {
-      auto &step = *plan.current();
-      auto &p = step.placement;
-      if (ev.type == p.type && ev.rotation == p.rotation &&
-          ev.x == p.x && ev.y == p.y) {
-        plan.advance();
-        ai.advance(p, step.uses_hold);
-      }
-    }
-    needs_search = true;
-  }
-
-  void deactivate() {
-    search_task.reset();
-    plan = Plan{};
-    plan_computed = false;
-    needs_search = false;
-    autoplay = false;
-    custom_evaluator = nullptr;
-    override_beam_width.reset();
-    override_max_depth.reset();
-  }
+  // --- Lifecycle ---
+  void start_search(const GameState &state);
+  bool poll_search(); // returns true if a search just completed
+  void on_piece_locked(const eng::PieceLocked &ev);
+  void on_garbage();
+  void on_undo();
+  void deactivate();
 
 private:
-  void build_plan(const SearchResult &result) {
-    plan.steps.clear();
-    plan.current_step = 0;
+  std::unique_ptr<BeamTask> beam_task_;
+  std::unique_ptr<PcTask> pc_task_;
 
-    if (result.pv.empty())
-      return;
+  Plan plan_;
+  PlanSource plan_source_ = PlanSource::None;
+  float last_score_ = 0.0f;
+  int last_depth_ = 0;
+  std::vector<std::pair<Placement, float>> last_root_scores_;
 
-    BoardBitset sim = search_board;
-    for (size_t i = 0; i < result.pv.size(); ++i) {
-      auto &p = result.pv[i];
-      Plan::Step step;
-      step.placement = p;
-      step.uses_hold = (i == 0) ? result.hold_used : false;
-      sim.place(p.type, p.rotation, p.x, p.y);
-      step.lines_cleared = sim.clear_lines();
-      step.board_after = sim;
-      plan.steps.push_back(std::move(step));
-    }
-  }
+  // Saved at start_search time — used for plan building and PC fallback
+  BeamInput last_input_;
+
+  void build_plan_from_beam(const BeamResult &result);
+  void build_plan_from_pc(const PcResult &result);
+  void start_beam_fallback();
 };

@@ -3,7 +3,7 @@
 #include "eval.h"
 
 // Evaluator for T-spin double chains (20TSD mode).
-class TsdEvaluator : public Evaluator {
+class AtkEvaluator : public Evaluator {
 public:
   float board_eval(const BoardBitset &board) const override {
     // TSD mode: heavily reward T-spin overhangs, keep board clean otherwise.

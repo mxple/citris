@@ -4,6 +4,8 @@
 #include "pc_combo.h"
 #include "movegen.h"
 #include <algorithm>
+#include <atomic>
+#include <thread>
 
 namespace {
 
@@ -313,4 +315,55 @@ PcResult find_perfect_clear(const BoardBitset &board,
   }
 
   return {};
+}
+
+// ---------------------------------------------------------------------------
+// PcTask — async wrapper
+// ---------------------------------------------------------------------------
+
+struct PcTask::Impl {
+  BoardBitset board;
+  std::vector<PieceType> queue;
+  std::optional<PieceType> hold;
+  PcConfig cfg;
+  std::thread thread;
+  std::atomic<bool> done{false};
+  PcResult result;
+};
+
+PcTask::PcTask(BeamInput input, PcConfig cfg)
+    : impl_(std::make_unique<Impl>()) {
+  auto &impl = *impl_;
+  impl.board = input.board;
+  impl.queue = std::move(input.queue);
+  impl.hold = input.hold;
+  impl.cfg = cfg;
+
+  impl.thread = std::thread([this] {
+    impl_->result = find_perfect_clear(impl_->board, impl_->queue,
+                                       impl_->hold, impl_->cfg);
+    impl_->done.store(true, std::memory_order_release);
+  });
+}
+
+PcTask::~PcTask() { cancel(); }
+
+bool PcTask::ready() const {
+  return impl_->done.load(std::memory_order_acquire);
+}
+
+PcResult PcTask::get() {
+  if (impl_->thread.joinable())
+    impl_->thread.join();
+  return impl_->result;
+}
+
+void PcTask::cancel() {
+  // No interrupt support — just wait for the search to finish.
+  if (impl_->thread.joinable())
+    impl_->thread.join();
+}
+
+std::unique_ptr<PcTask> start_pc_search(BeamInput input, PcConfig cfg) {
+  return std::unique_ptr<PcTask>(new PcTask(std::move(input), cfg));
 }
