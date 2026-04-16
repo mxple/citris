@@ -1,5 +1,4 @@
 #include "ai/eval/eval.h"
-#include "ai/checkpoint.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -209,89 +208,4 @@ float evaluate_board(const BoardBitset &board, const EvalWeights &w) {
   score += tsd_count * w.tsd_overhang;
 
   return score;
-}
-
-float evaluate_checkpoint(const BoardBitset &board, const Checkpoint &target,
-                          const EvalWeights &w) {
-  auto ms = target.match_score(board);
-  float cp_score =
-      w.checkpoint_match * ms.matched + w.checkpoint_missing * ms.missing;
-  if (target.match_mode == MatchMode::Strict)
-    cp_score += w.checkpoint_extra * ms.extra;
-  return cp_score + evaluate_board(board, w);
-}
-
-float evaluate_checkpoint(const BoardBitset &board,
-                          const std::vector<const Checkpoint *> &targets,
-                          const EvalWeights &w) {
-  if (targets.empty())
-    return evaluate_board(board, w);
-  float best = -1e18f;
-  for (auto *t : targets)
-    best = std::max(best, evaluate_checkpoint(board, *t, w));
-  return best;
-}
-
-// Detect checkpoints where the target board is entirely empty (perfect clear
-// target). For these, the standard "extra cell" penalty gives a constant
-// negative score at each depth that provides no search guidance. Instead we
-// score by row-completion progress: filling rows toward 10/10.
-static bool is_clear_target(const Checkpoint &cp) {
-  if (cp.match_mode != MatchMode::Strict)
-    return false;
-  for (int y = 0; y < cp.height(); ++y)
-    if (cp.rows[y] & 0x3FF)
-      return false;
-  return cp.height() > 0;
-}
-
-static float score_clear_target(const BoardBitset &board, const Checkpoint &cp,
-                                const EvalWeights &w) {
-  float score = 0.0f;
-  for (int y = 0; y < cp.height(); ++y) {
-    int filled = std::popcount(static_cast<unsigned>(board.rows[y] & 0x3FF));
-    // Quadratic: heavily reward nearly-complete rows
-    score += static_cast<float>(filled * filled) * 0.5f;
-  }
-  return score;
-}
-
-float evaluate_checkpoint_preclr(const BoardBitset &board,
-                                 const std::vector<const Checkpoint *> &targets,
-                                 const EvalWeights &w,
-                                 const Placement &placement) {
-  if (targets.empty())
-    return 0.0f;
-
-  auto cells = placement.cells();
-  float best = -1e18f;
-
-  for (auto *t : targets) {
-    float cp_score;
-    if (is_clear_target(*t)) {
-      cp_score = score_clear_target(board, *t, w);
-    } else {
-      auto ms = t->match_score(board);
-      cp_score =
-          w.checkpoint_match * ms.matched + w.checkpoint_missing * ms.missing;
-      if (t->match_mode == MatchMode::Strict)
-        cp_score += w.checkpoint_extra * ms.extra;
-    }
-
-    if (t->has_piece_annotations()) {
-      for (auto &c : cells) {
-        int8_t expected = t->cell_piece(c.x, c.y);
-        if (expected < 0)
-          continue;
-        if (expected == static_cast<int8_t>(placement.type))
-          cp_score += w.annotation_match;
-        else
-          cp_score += w.annotation_mismatch;
-      }
-    }
-
-    best = std::max(best, cp_score);
-  }
-
-  return best;
 }

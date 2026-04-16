@@ -1,5 +1,4 @@
 #include "ui/menu.h"
-#include "presets/opener.h"
 #include "presets/presets.h"
 #include "ui/settings_editor.h"
 
@@ -100,10 +99,6 @@ std::unique_ptr<GameMode> Menu::run() {
         }
       }
       ImGui::Spacing();
-      if (button("Opener Trainer")) {
-        openers_ = all_openers();
-        screen_ = Screen::OpenerSelect;
-      }
       if (button("Training")) {
         user_modes_ = all_user_modes();
         screen_ = Screen::UserModeSelect;
@@ -111,15 +106,6 @@ std::unique_ptr<GameMode> Menu::run() {
       ImGui::Spacing();
       if (button("Back"))
         back_to_main = true;
-    } else if (screen_ == Screen::OpenerSelect) {
-      for (int i = 0; i < (int)openers_.size(); ++i) {
-        if (button(openers_[i].name.c_str())) {
-          selected = std::make_unique<OpenerMode>(openers_[i]);
-        }
-      }
-      ImGui::Spacing();
-      if (button("Back"))
-        screen_ = Screen::PresetSelect;
     } else if (screen_ == Screen::UserModeSelect) {
       for (int i = 0; i < (int)user_modes_.size(); ++i) {
         if (button(user_modes_[i]->title().c_str())) {

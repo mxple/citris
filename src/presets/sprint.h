@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/eval/eval.h"
 #include "game_mode.h"
 #include <algorithm>
 #include <cstdio>

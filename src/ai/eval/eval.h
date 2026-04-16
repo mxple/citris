@@ -5,8 +5,6 @@
 #include <memory>
 #include <vector>
 
-struct Checkpoint;
-
 enum class EvalType : int { Tsd, Sprint, Cheese, Default };
 
 // ---------------------------------------------------------------------------
@@ -65,9 +63,6 @@ struct Evaluator {
   virtual bool accumulate_tactical() const { return false; }
 };
 
-// ---------------------------------------------------------------------------
-// Legacy checkpoint eval API — kept for backward compatibility until Phase 2.
-// ---------------------------------------------------------------------------
 
 struct EvalWeights {
   // Board quality
@@ -81,25 +76,6 @@ struct EvalWeights {
   float row_transitions = -0.3f;
   float well_depth = 0.2f;
   float tsd_overhang = 6.0f;
-
-  // Checkpoint matching
-  float checkpoint_match = 10.0f;
-  float checkpoint_missing = -15.0f;
-  float checkpoint_extra = -20.0f;
-
-  // Annotation scoring
-  float annotation_match = 5.0f;
-  float annotation_mismatch = -8.0f;
 };
 
 float evaluate_board(const BoardBitset &board, const EvalWeights &weights);
-
-float evaluate_checkpoint(const BoardBitset &board, const Checkpoint &target,
-                          const EvalWeights &weights);
-float evaluate_checkpoint(const BoardBitset &board,
-                          const std::vector<const Checkpoint *> &targets,
-                          const EvalWeights &weights);
-float evaluate_checkpoint_preclr(const BoardBitset &board,
-                                 const std::vector<const Checkpoint *> &targets,
-                                 const EvalWeights &weights,
-                                 const Placement &placement);

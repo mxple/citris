@@ -30,15 +30,9 @@ struct PlannedPlacement {
   int step_number = 0;
 };
 
-// Target checkpoint silhouette rendered as a dim board overlay.
-struct CheckpointOverlay {
-  std::vector<uint16_t> rows;  // bitmask per row (10 bits)
-};
-
 struct ViewModel {
   GameState state;
   Stats::Snapshot stats;
   std::optional<HudData> hud;
-  std::vector<PlannedPlacement> plan_overlay;          // empty when no plan active
-  std::optional<CheckpointOverlay> checkpoint_overlay;  // target silhouette
+  std::vector<PlannedPlacement> plan_overlay;  // empty when no plan active
 };

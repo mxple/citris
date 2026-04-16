@@ -1,7 +1,7 @@
 #pragma once
 
 #include "board_bitset.h"
-#include "checkpoint.h"
+#include "plan.h"
 #include "render/view_model.h"
 #include <array>
 #include <span>

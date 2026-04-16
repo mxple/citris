@@ -2,7 +2,7 @@
 
 #include "ai/ai.h"
 #include "ai/board_bitset.h"
-#include "ai/checkpoint.h"
+#include "ai/plan.h"
 #include "ai/eval/eval.h"
 #include "ai/eval/cheese.h"
 #include "ai/eval/sprint.h"

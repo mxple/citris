@@ -43,7 +43,7 @@ public:
   ~Renderer();
 
   // Render the full game scene (hold area, playfield, current piece,
-  // preview area, plan/checkpoint overlays) into an internal SDL_Texture
+  // preview area, plan overlay) into an internal SDL_Texture
   // of fixed size (kSceneCols * kSkinTile) × (kSceneRows * kSkinTile).
   // The caller is responsible for scaling this texture to the display target.
   SDL_Texture *draw_scene_to_texture(const ViewModel &vm);
@@ -68,7 +68,6 @@ private:
   void draw_mini_piece(PieceType type, bool greyed, float region_col,
                        float region_y_up);
   void draw_plan_overlay(const std::vector<PlannedPlacement> &placements);
-  void draw_checkpoint_overlay(const CheckpointOverlay &overlay);
 
   void draw_tile(float x, float y, int tile_idx, Color tint = Color::White());
   void draw_solid(const SDL_FRect &dst, Color color);

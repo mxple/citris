@@ -136,10 +136,8 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
   draw_board_border();
   draw_gridlines();
 
-  // Content: board cells, checkpoint overlay, plan overlay, ghost, active piece.
+  // Content: board cells, plan overlay, ghost, active piece.
   draw_board(state.board);
-  // if (vm.checkpoint_overlay)
-  //   draw_checkpoint_overlay(*vm.checkpoint_overlay);
   if (!vm.plan_overlay.empty())
     draw_plan_overlay(vm.plan_overlay);
   draw_ghost(state.ghost_piece);
@@ -316,20 +314,3 @@ void Renderer::draw_plan_overlay(
   }
 }
 
-void Renderer::draw_checkpoint_overlay(const CheckpointOverlay &overlay) {
-  constexpr float t = L::kTileSize;
-  // TODO make this configurable or remove
-  auto alpha = static_cast<uint8_t>(
-      std::clamp(255.f, 0.f, 255.f));
-  Color color(100, 180, 255, alpha);
-  for (int y = 0; y < static_cast<int>(overlay.rows.size()); ++y) {
-    uint16_t row = overlay.rows[y];
-    for (int x = 0; x < L::kBoardCols; ++x) {
-      if ((row >> x) & 1) {
-        float px = (L::kBoardColX + x) * t;
-        float py = row_px(y);
-        draw_solid({px, py, t, t}, color);
-      }
-    }
-  }
-}
