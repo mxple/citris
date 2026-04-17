@@ -72,13 +72,14 @@ CellLayout compute_cell_layout(SDL_Window *window, const Settings &settings,
   float layout_w = layout.cell_px * L::kSceneCols;
   float layout_h = layout.cell_px * L::kSceneRows;
 
+  float kPad = layout.cell_px;  // one cell of breathing room beside the sidebar
   float centered_x = (W - layout_w) * 0.5f;
-  if (centered_x >= sidebar_w) {
+  if (centered_x >= sidebar_w + kPad) {
     // No overlap — leave the board centered in the full window.
     layout.origin_x = centered_x;
-  } else if (sidebar_w + layout_w <= W) {
-    // Sidebar would overlap; push right just enough to clear it.
-    layout.origin_x = sidebar_w;
+  } else if (sidebar_w + kPad + layout_w <= W) {
+    // Sidebar would overlap; push right just enough to clear it (+ padding).
+    layout.origin_x = sidebar_w + kPad;
   } else {
     // Board cannot fit alongside the sidebar at the chosen size — fall
     // back to fitting whatever space remains (auto_scale only).

@@ -294,21 +294,20 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     if (autoplay) {
       ImGui::TableNextRow();
       ImGui::TableNextColumn();
-      ImGui::TextUnformatted("Speed");
-      ImGui::TableNextColumn();
-      int speed = 500 - ai_ctrl.interval_ms();
-      ImGui::SetNextItemWidth(-FLT_MIN);
-      if (ImGui::SliderInt("##speed", &speed, 0, 500))
-        ai_ctrl.set_interval_ms(500 - speed);
-
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
       ImGui::TextUnformatted("Real movement");
       ImGui::TableNextColumn();
       bool real = ai_ctrl.input_mode() == AIInputMode::RealInputs;
       if (ImGui::Checkbox("##realmove", &real))
         ai_ctrl.set_input_mode(real ? AIInputMode::RealInputs
                                     : AIInputMode::DirectPlacement);
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted("Speed");
+      ImGui::TableNextColumn();
+      int speed = 1000 - ai_ctrl.interval_ms();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      if (ImGui::SliderInt("##speed", &speed, 0, 1000))
+        ai_ctrl.set_interval_ms(1000 - speed);
     }
 
     ImGui::TableNextRow();
