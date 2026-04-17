@@ -46,14 +46,11 @@ public:
   bool auto_restart() const override { return true; }
   bool has_sidebar() const override { return true; }
 
-  PieceQueue create_queue(unsigned seed) const override {
-    // Puzzle pieces are pre-loaded into the buffer; the source is exhausted
-    // (no further pieces beyond the puzzle). Then we hold-shuffle the
-    // buffer so the player has to use hold to recover the solution order.
-    PieceQueue q(std::make_unique<EmptySource>(), current_.queue);
-    std::mt19937 shuffle_rng{seed};
-    q.shuffle(PieceQueue::ShufflePolicy::HoldEquivalent, shuffle_rng);
-    return q;
+  PieceQueue create_queue(unsigned /*seed*/) const override {
+    // Puzzle pieces are pre-loaded into the buffer (already hold-shuffled
+    // by the puzzle generator); the source is exhausted (no further
+    // pieces beyond the puzzle).
+    return PieceQueue(std::make_unique<EmptySource>(), current_.queue);
   }
 
   void on_start(TimePoint now) override {

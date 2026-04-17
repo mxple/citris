@@ -1,6 +1,7 @@
 #include "puzzle_gen.h"
 #include "ai/board_bitset.h"
 #include "ai/movegen.h"
+#include "engine/hold_shuffle.h"
 #include "engine/piece.h"
 #include <algorithm>
 #include <array>
@@ -572,10 +573,11 @@ std::optional<PuzzleResult> generate_puzzle(const PuzzleRequest &req,
 
     PuzzleResult result;
     result.board = work.to_board();
-    // Returns the queue in PLAY order. Consumers wanting the hold-shuffle
-    // disguise (matches script7.js:991) call PieceQueue::shuffle on the
-    // resulting queue — see TSpinPracticeMode::create_queue.
-    result.queue = build_queue(placed, local);
+    // Disguise the queue with a hold-equivalent permutation (matches
+    // script7.js:991) so the player has to use hold to recover play order.
+    // `solution` stays in play order — the player's job is to figure out
+    // which hold ops yield it.
+    result.queue = shuffle_hold_equivalent(build_queue(placed, local), rng);
     result.solution = build_solution(placed);
     return result;
   }

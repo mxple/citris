@@ -138,7 +138,7 @@ if(EMSCRIPTEN)
       -sALLOW_MEMORY_GROWTH=1 \
       -sUSE_SDL=0 \
       -pthread \
-      -sPTHREAD_POOL_SIZE=2 \
+      -sPTHREAD_POOL_SIZE=6 \
       --preload-file ${CMAKE_SOURCE_DIR}/assets@/assets \
       --preload-file ${CMAKE_SOURCE_DIR}/assets/default_settings.ini@/settings.ini \
       --shell-file ${CMAKE_SOURCE_DIR}/web/shell.html \

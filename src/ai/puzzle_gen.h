@@ -43,13 +43,15 @@ struct PuzzleRequest {
 struct PuzzleResult {
   Board board;
 
-  // Queue in forward-play order: `num_pieces` downstack pieces + reserved
-  // pieces (T for TSD) appended at the tail.
+  // Queue with `num_pieces` downstack pieces + reserved pieces appended,
+  // then permuted by a hold-equivalent shuffle. The player must use hold
+  // operations to recover the play order that solves the puzzle.
   std::vector<PieceType> queue;
 
-  // Placements for the downstack portion (size == num_pieces). solution[i]
-  // is the reverse-constructed placement for queue[i]. Reserved pieces
-  // (T at the end) have no placement here — the player solves the TSD.
+  // Placements for the downstack portion (size == num_pieces) in PLAY
+  // order — independent of `queue`'s permutation. solution[i] is the
+  // i-th piece the player should place. Reserved pieces (e.g. final T
+  // for TSD) have no placement here — the player solves them.
   std::vector<Placement> solution;
 };
 
