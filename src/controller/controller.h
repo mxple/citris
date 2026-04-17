@@ -22,4 +22,6 @@ public:
   }
   virtual void fill_plan_overlay(ViewModel &, const GameState &) {}
   virtual void draw_imgui() {}
+  virtual bool has_sidebar() const { return false; }
+  virtual void draw_sidebar() {}
 };

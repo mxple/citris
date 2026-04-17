@@ -178,7 +178,12 @@ run_start:
     mode_->draw_imgui();
 
     ViewModel vm = build_view_model(now);
-    draw_game_ui(*game_renderer_, window_, vm, settings_);
+    std::vector<IController *> ctrl_ptrs;
+    ctrl_ptrs.reserve(controllers_.size());
+    for (auto &c : controllers_)
+      ctrl_ptrs.push_back(c.get());
+    draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
+                 ctrl_ptrs);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);

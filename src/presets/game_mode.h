@@ -57,6 +57,10 @@ public:
 
   // Per-frame ImGui window(s) owned by the mode (e.g. debug controls).
   virtual void draw_imgui() {}
+  // Return true if this mode has sidebar content to display.
+  virtual bool has_sidebar() const { return false; }
+  // Per-frame content drawn inside the sidebar panel (use CollapsingHeader).
+  virtual void draw_sidebar() {}
 
   // Drain-and-clear a restart request from the mode (e.g. set by a debug
   // button). Polled by the manager next to auto_restart().

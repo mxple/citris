@@ -42,6 +42,7 @@ public:
 
   bool undo_allowed() const override { return true; }
   bool auto_restart() const override { return true; }
+  bool has_sidebar() const override { return true; }
 
   std::unique_ptr<BagRandomizer> create_bag(unsigned seed) const override {
     return std::make_unique<FixedQueueRandomizer>(current_.queue, seed);
@@ -72,6 +73,7 @@ public:
     quads_ = 0;
     no_float_ok_ = true; // empty residual stack trivially satisfies
     last_was_win_ = false;
+    show_hints_ = false;
   }
 
   void on_piece_locked(const eng::PieceLocked &ev, const GameState &state,
@@ -81,7 +83,7 @@ public:
       tsds_++;
     if (ev.lines_cleared == 4)
       quads_++;
-    // Cache the floating-cells check so draw_imgui (which has no GameState
+    // Cache the floating-cells check so draw_sidebar (which has no GameState
     // access) can reflect it live in the goal list.
     no_float_ok_ = no_floating_cells(state.board);
 
@@ -154,28 +156,9 @@ public:
     }
   }
 
-  void draw_imgui() override {
-    // Anchor the window under the preview column. The game scene is a
-    // 20x24-cell grid centered in the viewport under auto-scale; the
-    // preview (NEXT) column occupies cols 15..19 and preview pieces stop
-    // above y_up=5. We place the window starting at y_up=4 and extend down.
-    const ImGuiViewport *vp = ImGui::GetMainViewport();
-    const float W = vp->WorkSize.x, H = vp->WorkSize.y;
-    constexpr int kCols = 20, kRows = 24, kNextCol = 15, kBelowPreviewTop = 19;
-    const float cell_px = std::min(W / float(kCols), H / float(kRows));
-    const float scene_w = kCols * cell_px, scene_h = kRows * cell_px;
-    const float origin_x = vp->WorkPos.x + (W - scene_w) * 0.5f;
-    const float origin_y = vp->WorkPos.y + (H - scene_h) * 0.5f;
-    ImGui::SetNextWindowPos(
-        ImVec2(origin_x + kNextCol * cell_px,
-               origin_y + kBelowPreviewTop * cell_px),
-        ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(5 * cell_px, 0), ImGuiCond_Always);
-
-    constexpr ImGuiWindowFlags kFlags =
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-    ImGui::Begin(title().c_str(), nullptr, kFlags);
+  void draw_sidebar() override {
+    if (!ImGui::CollapsingHeader(title().c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+      return;
 
     // Goal list — shows the active variant's win criteria with live
     // progress markers so the player can verify what's scored and what's
@@ -200,15 +183,15 @@ public:
       request_fresh_puzzle();
     }
 
-    if (ImGui::Button("Reset bank"))
+    float btn_w = (ImGui::GetContentRegionAvail().x -
+                   ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+    if (ImGui::Button("Reset bank", ImVec2(btn_w, 0)))
       bank_->clear_pool();
-
     ImGui::SameLine();
-    const char *hint_label = show_hints_ ? "Hide hints" : "Show hints";
-    if (ImGui::Button(hint_label))
-      show_hints_ = !show_hints_;
-
-    ImGui::End();
+    ImGui::BeginDisabled(show_hints_);
+    if (ImGui::Button("Hint", ImVec2(-FLT_MIN, 0)))
+      show_hints_ = true;
+    ImGui::EndDisabled();
   }
 
   bool consume_restart_request() override {
@@ -280,7 +263,7 @@ private:
   // Staging value for the slider — only pushed to num_pieces_ on release.
   int slider_pieces_;
   TSpinVariant variant_;
-  bool show_hints_ = true;
+  bool show_hints_ = false;
   std::unique_ptr<PuzzleBank> bank_;
   GeneratedSetup current_;
   bool has_current_ = false;
