@@ -23,8 +23,10 @@ void AIState::start_search(const GameState &state) {
   BeamInput input;
   input.board = BoardBitset::from_board(state.board);
   input.queue.push_back(state.current_piece.type);
-  for (auto &p : state.preview)
-    input.queue.push_back(p);
+  int next_visible =
+      std::min(static_cast<int>(state.queue.size()), queue_lookahead);
+  for (int i = 0; i < next_visible; ++i)
+    input.queue.push_back(state.queue[i]);
   input.hold = state.hold_piece;
   input.hold_available = state.hold_available;
   input.bag_draws = state.bag_draws;
@@ -97,11 +99,12 @@ void AIState::on_piece_locked(const eng::PieceLocked &ev) {
   }
 }
 
-void AIState::on_garbage() {
+void AIState::on_garbage(int lines) {
   if (!active)
     return;
-  plan_ = Plan{};
-  plan_source_ = PlanSource::None;
+  // Offset remaining plan steps rather than invalidating
+  for (int i = plan_.current_step; i < static_cast<int>(plan_.steps.size()); ++i)
+    plan_.steps[i].placement.y += lines;
   needs_search = true;
 }
 
@@ -140,12 +143,40 @@ void AIState::build_plan_from_beam(const BeamResult &result) {
   if (result.pv.empty())
     return;
 
+  const auto &queue = last_input_.queue;
+  int qi = 0;
+  auto hold = last_input_.hold;
   BoardBitset sim = last_input_.board;
-  for (size_t i = 0; i < result.pv.size(); ++i) {
-    const auto &p = result.pv[i];
+
+  // Truncate PV at the known-queue boundary. Deeper PV steps come from
+  // draw_from_bag speculation and commit to a specific bag ordering that
+  // rarely matches the real game's RNG. Dispatching them makes the engine
+  // silently drop the mismatched Place command and stalls autoplay.
+  // Followup: replace the flat Plan with a tree branching on piece reveals
+  // so speculative work is preserved (see wiki/ai.md §"Plan Dispatch").
+  for (const auto &p : result.pv) {
+    if (qi >= (int)queue.size())
+      break;
+
     Plan::Step step;
     step.placement = p;
-    step.uses_hold = (i == 0) ? result.hold_used : false;
+
+    PieceType current = queue[qi];
+    if (current == p.type) {
+      step.uses_hold = false;
+      ++qi;
+    } else if (hold.has_value() && *hold == p.type) {
+      step.uses_hold = true;
+      hold = current;
+      ++qi;
+    } else {
+      if (qi + 1 >= (int)queue.size())
+        break;
+      step.uses_hold = true;
+      hold = current;
+      qi += 2;
+    }
+
     sim.place(p.type, p.rotation, p.x, p.y);
     step.lines_cleared = sim.clear_lines();
     step.board_after = sim;
@@ -168,6 +199,9 @@ void AIState::build_plan_from_pc(const PcResult &result) {
   BoardBitset sim = last_input_.board;
 
   for (const auto &p : result.solution) {
+    if (qi >= (int)queue.size())
+      break;
+
     Plan::Step step;
     step.placement = p;
 
@@ -180,6 +214,8 @@ void AIState::build_plan_from_pc(const PcResult &result) {
       hold = current;
       ++qi;
     } else {
+      if (qi + 1 >= (int)queue.size())
+        break;
       // Hold was empty — hold current, play next
       step.uses_hold = true;
       hold = current;

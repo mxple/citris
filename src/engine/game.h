@@ -32,6 +32,7 @@ public:
 
 private:
   void handle_move(const cmd::MovePiece &e);
+  void handle_place(const cmd::Place &c);
   void handle_gravity(TimePoint expired_at);
   void handle_lock_delay_expired();
   void handle_garbage_received(int lines, int gap_col, bool immediate);

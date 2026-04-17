@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/placement.h"
 #include "notification.h"
 
 enum class GameInput {
@@ -36,6 +37,9 @@ struct SetGameOver {
   bool won;
 };
 struct Undo {};
+struct Place {
+  Placement placement;
+};
 struct Passthrough {
   Notification notification;
 };
@@ -43,7 +47,8 @@ struct Passthrough {
 
 using Command = std::variant<cmd::MovePiece, cmd::SetARRDirection,
                              cmd::SetSoftDropActive, cmd::AddGarbage,
-                             cmd::SetGameOver, cmd::Undo, cmd::Passthrough>;
+                             cmd::SetGameOver, cmd::Undo, cmd::Place,
+                             cmd::Passthrough>;
 
 class CommandBuffer {
 public:

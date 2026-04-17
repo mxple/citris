@@ -3,6 +3,7 @@
 #include "ai/ai_mode.h"
 #include "ai/plan_overlay.h"
 #include "ai_state.h"
+#include "controller/ai_controller.h"
 #include "controller.h"
 #include "presets/game_mode.h"
 #include "settings.h"
@@ -11,12 +12,14 @@
 
 class ToolController : public IController {
 public:
-  ToolController(const Settings &settings, const GameMode &mode, AIState &ai)
+  ToolController(const Settings &settings, const GameMode &mode, AIState &ai,
+                 AIController &ai_ctrl)
       : undo_key_(settings.undo), debug_key_(settings.debug_menu),
-        undo_allowed_(mode.undo_allowed()), mode_(mode), ai_(ai) {}
+        undo_allowed_(mode.undo_allowed()), mode_(mode), ai_(ai),
+        ai_ctrl_(ai_ctrl) {}
 
-  void update(const InputEvent &ev, TimePoint, const GameState &,
-              CommandBuffer &cmds) override {
+  void handle_event(const InputEvent &ev, TimePoint, const GameState &,
+                    CommandBuffer &cmds) override {
     if (auto *kd = std::get_if<KeyDown>(&ev)) {
       if (kd->key == undo_key_ && undo_allowed_)
         cmds.push(cmd::Undo{});
@@ -33,8 +36,8 @@ public:
     }
   }
 
-  void check_timers(TimePoint, const GameState &state,
-                    CommandBuffer &) override {
+  void tick(TimePoint, const GameState &state,
+            CommandBuffer &) override {
     last_state_ = state;
   }
 
@@ -81,10 +84,19 @@ public:
           ImGui::TableNextColumn();
           ImGui::TextUnformatted("Speed");
           ImGui::TableNextColumn();
-          int speed = 500 - ai_.input_interval_ms;
+          int speed = 500 - ai_ctrl_.interval_ms();
           ImGui::SetNextItemWidth(-FLT_MIN);
           if (ImGui::SliderInt("##speed", &speed, 0, 500))
-            ai_.input_interval_ms = 500 - speed;
+            ai_ctrl_.set_interval_ms(500 - speed);
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::TextUnformatted("Real movement");
+          ImGui::TableNextColumn();
+          bool real = ai_ctrl_.input_mode() == AIInputMode::RealInputs;
+          if (ImGui::Checkbox("##realmove", &real))
+            ai_ctrl_.set_input_mode(real ? AIInputMode::RealInputs
+                                         : AIInputMode::DirectPlacement);
         }
 
         ImGui::TableNextRow();
@@ -128,6 +140,14 @@ public:
         if (ImGui::SliderInt("##beam", &ai_.overrides.width, 1, 2000))
           if (ai_.active) ai_.needs_search = true;
 
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Lookahead");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##lookahead", &ai_.queue_lookahead, 1, 15))
+          if (ai_.active) ai_.needs_search = true;
+
         ImGui::EndTable();
       }
 
@@ -156,30 +176,30 @@ public:
         ImGui::TextUnformatted("No plan");
       }
 
-      auto eval = ai_.make_evaluator();
-      BoardBitset bb = BoardBitset::from_board(last_state_.board);
-      ImGui::Text("Board eval: %.1f", eval->board_eval(bb));
-
-      if (ai_.plan_computed()) {
-        ImGui::Text("Best score: %.1f", ai_.last_score());
-        ImGui::Text("Search depth: %d", ai_.last_depth());
-
-        if (!ai_.root_scores().empty()) {
-          ImGui::Separator();
-          ImGui::TextUnformatted("Top moves:");
-          static const char *piece_names[] = {"I", "O", "T", "S",
-                                              "Z", "J", "L"};
-          static const char *rot_names[] = {"N", "E", "S", "W"};
-          int shown = std::min((int)ai_.root_scores().size(), 5);
-          for (int i = 0; i < shown; ++i) {
-            auto &[pl, sc] = ai_.root_scores()[i];
-            ImGui::Text(" %d. %s-%s (%d,%d) %.1f", i + 1,
-                        piece_names[static_cast<int>(pl.type)],
-                        rot_names[static_cast<int>(pl.rotation)], pl.x, pl.y,
-                        sc);
-          }
-        }
-      }
+      // auto eval = ai_.make_evaluator();
+      // BoardBitset bb = BoardBitset::from_board(last_state_.board);
+      // ImGui::Text("Board eval: %.1f", eval->board_eval(bb));
+      //
+      // if (ai_.plan_computed()) {
+      //   ImGui::Text("Best score: %.1f", ai_.last_score());
+      //   ImGui::Text("Search depth: %d", ai_.last_depth());
+      //
+      //   if (!ai_.root_scores().empty()) {
+      //     ImGui::Separator();
+      //     ImGui::TextUnformatted("Top moves:");
+      //     static const char *piece_names[] = {"I", "O", "T", "S",
+      //                                         "Z", "J", "L"};
+      //     static const char *rot_names[] = {"N", "E", "S", "W"};
+      //     int shown = std::min((int)ai_.root_scores().size(), 5);
+      //     for (int i = 0; i < shown; ++i) {
+      //       auto &[pl, sc] = ai_.root_scores()[i];
+      //       ImGui::Text(" %d. %s-%s (%d,%d) %.1f", i + 1,
+      //                   piece_names[static_cast<int>(pl.type)],
+      //                   rot_names[static_cast<int>(pl.rotation)], pl.x, pl.y,
+      //                   sc);
+      //     }
+      //   }
+      // }
     }
     ImGui::End();
   }
@@ -224,5 +244,6 @@ private:
   bool show_window_ = false;
   const GameMode &mode_;
   AIState &ai_;
+  AIController &ai_ctrl_;
   GameState last_state_;
 };

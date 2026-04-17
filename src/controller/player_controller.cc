@@ -12,8 +12,8 @@ PlayerController::PlayerController(const Settings &settings)
   key_map_[settings.hold] = Input::Hold;
 }
 
-void PlayerController::update(const InputEvent &ev, TimePoint now,
-                              const GameState &, CommandBuffer &cmds) {
+void PlayerController::handle_event(const InputEvent &ev, TimePoint now,
+                                    const GameState &, CommandBuffer &cmds) {
   std::visit(
       [&](auto &&e) {
         using T = std::decay_t<decltype(e)>;
@@ -26,8 +26,8 @@ void PlayerController::update(const InputEvent &ev, TimePoint now,
       ev);
 }
 
-void PlayerController::check_timers(TimePoint now, const GameState &,
-                                    CommandBuffer &cmds) {
+void PlayerController::tick(TimePoint now, const GameState &,
+                            CommandBuffer &cmds) {
   // DAS timers
   for (int i = 0; i < 2; ++i) {
     if (das_deadline_[i] && now >= *das_deadline_[i]) {

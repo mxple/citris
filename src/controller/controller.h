@@ -10,10 +10,10 @@
 class IController {
 public:
   virtual ~IController() = default;
-  virtual void update(const InputEvent &ev, TimePoint now,
-                      const GameState &state, CommandBuffer &cmds) = 0;
-  virtual void check_timers(TimePoint now, const GameState &state,
-                            CommandBuffer &cmds) = 0;
+  virtual void handle_event(const InputEvent &ev, TimePoint now,
+                            const GameState &state, CommandBuffer &cmds) = 0;
+  virtual void tick(TimePoint now, const GameState &state,
+                    CommandBuffer &cmds) = 0;
   virtual std::optional<TimePoint> next_deadline() const = 0;
   virtual void reset_input_state() = 0;
   virtual void notify(const EngineEvent &ev, TimePoint now) {

@@ -2,6 +2,8 @@
 #include "presets/game_mode.h"
 #include "srs.h"
 
+#include "profiler.h"
+
 Game::Game(const GameMode &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)) {
   bag_ = mode_.create_bag(seed);
@@ -33,6 +35,9 @@ void Game::apply(const CommandBuffer &cmds) {
           }
           if constexpr (std::is_same_v<T, cmd::Undo>) {
             handle_undo();
+          }
+          if constexpr (std::is_same_v<T, cmd::Place>) {
+            handle_place(c);
           }
           if constexpr (std::is_same_v<T, cmd::Passthrough>) {
             pending_events_.push_back(c.notification);
@@ -69,7 +74,7 @@ GameState Game::state() const {
       .ghost_piece = compute_ghost(),
       .hold_piece = hold_piece_,
       .hold_available = hold_available_,
-      .preview = bag_->preview(6),
+      .queue = bag_->preview(16), // 16 for 6 line PC solves
       .attack_state = attack_state_,
       .game_over = game_over_,
       .won = won_,
@@ -209,6 +214,51 @@ void Game::handle_move(const cmd::MovePiece &e) {
   }
 }
 
+void Game::handle_place(const cmd::Place &c) {
+  // TODO: ERROR log in debug builds if placement.type != current_piece_.type
+  if (c.placement.type != current_piece_.type)
+    return;
+
+  push_snapshot();
+  current_piece_ = c.placement.to_piece();
+  current_piece_ = compute_ghost(); // snap to ground
+  last_move_was_rotation_ = false;
+
+  auto locked_type = current_piece_.type;
+  auto locked_rot = current_piece_.rotation;
+  auto locked_x = static_cast<int8_t>(current_piece_.x);
+  auto locked_y = static_cast<int8_t>(current_piece_.y);
+  board_.place(current_piece_);
+
+  int cleared = board_.clear_lines();
+  lines_cleared_ += cleared;
+  int prev_combo = attack_state_.combo;
+  int attack =
+      compute_attack_and_update_state(attack_state_, cleared, c.placement.spin);
+  pending_attack_ += attack;
+  total_attack_ += attack;
+
+  bool pc = cleared > 0 && board_.is_empty();
+  if (pc) {
+    attack += 10;
+    pending_attack_ += 10;
+    total_attack_ += 10;
+  }
+  if (cleared > 0 || c.placement.spin != SpinKind::None) {
+    last_clear_ = {cleared, c.placement.spin, pc, piece_gen_};
+  }
+
+  pending_events_.push_back(eng::PieceLocked{
+      locked_type, locked_rot, locked_x, locked_y, cleared, c.placement.spin,
+      pc, attack, prev_combo, attack_state_.combo, attack_state_.b2b});
+
+  hold_available_ = true;
+  gravity_deadline_.reset();
+  lock_delay_deadline_.reset();
+  spawn_piece();
+  dirty_ = true;
+}
+
 void Game::handle_gravity(TimePoint expired_at) {
   if (drop1()) {
     dirty_ = true;
@@ -317,10 +367,9 @@ void Game::lock_piece() {
     last_clear_ = {cleared, spin, pc, piece_gen_};
   }
 
-  pending_events_.push_back(
-      eng::PieceLocked{locked_type, locked_rot, locked_x, locked_y,
-                       cleared, spin, pc, attack, prev_combo,
-                       attack_state_.combo, attack_state_.b2b});
+  pending_events_.push_back(eng::PieceLocked{
+      locked_type, locked_rot, locked_x, locked_y, cleared, spin, pc, attack,
+      prev_combo, attack_state_.combo, attack_state_.b2b});
 
   hold_available_ = true;
   gravity_deadline_.reset();

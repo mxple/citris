@@ -1,5 +1,4 @@
 #include "game_manager.h"
-#include "ai/pathfinder.h"
 #include "controller/ai_controller.h"
 #include "controller/player_controller.h"
 #include "controller/tool_controller.h"
@@ -21,11 +20,11 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
-  controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(
-      std::make_unique<ToolController>(settings_, *mode_, ai_state_));
   auto ai_ctrl = std::make_unique<AIController>();
   ai_controller_ = ai_ctrl.get();
+  controllers_.push_back(std::make_unique<PlayerController>(settings_));
+  controllers_.push_back(
+      std::make_unique<ToolController>(settings_, *mode_, ai_state_, *ai_controller_));
   controllers_.push_back(std::move(ai_ctrl));
   game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
 
@@ -44,7 +43,9 @@ void GameManager::reset() {
   auto overrides = ai_state_.overrides;
   bool was_autoplay = ai_state_.autoplay;
   int max_vis = ai_state_.max_visible;
-  int interval = ai_state_.input_interval_ms;
+  int lookahead = ai_state_.queue_lookahead;
+  int interval = ai_controller_->interval_ms();
+  AIInputMode input_mode = ai_controller_->input_mode();
 
   ai_state_.deactivate();
   ai_state_.mode = mode;
@@ -52,7 +53,7 @@ void GameManager::reset() {
   ai_state_.active = was_active;
   ai_state_.autoplay = was_autoplay;
   ai_state_.max_visible = max_vis;
-  ai_state_.input_interval_ms = interval;
+  ai_state_.queue_lookahead = lookahead;
   if (was_active)
     ai_state_.needs_search = true;
 
@@ -60,11 +61,13 @@ void GameManager::reset() {
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
   controllers_.clear();
-  controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(
-      std::make_unique<ToolController>(settings_, *mode_, ai_state_));
   auto ai_ctrl = std::make_unique<AIController>();
   ai_controller_ = ai_ctrl.get();
+  ai_controller_->set_interval_ms(interval);
+  ai_controller_->set_input_mode(input_mode);
+  controllers_.push_back(std::make_unique<PlayerController>(settings_));
+  controllers_.push_back(
+      std::make_unique<ToolController>(settings_, *mode_, ai_state_, *ai_controller_));
   controllers_.push_back(std::move(ai_ctrl));
 
   auto now = SdlClock::now();
@@ -112,7 +115,7 @@ run_start:
     // 2. Controller timers + input processing
     auto game_state = game_->state();
     for (auto &ctrl : controllers_)
-      ctrl->check_timers(now, game_state, cmds_);
+      ctrl->tick(now, game_state, cmds_);
     for (auto &iev : input_events) {
       if (std::holds_alternative<WindowClose>(iev)) {
         running_ = false;
@@ -132,7 +135,7 @@ run_start:
       else if (auto *ku = std::get_if<KeyUp>(&iev))
         event_time = ku->timestamp;
       for (auto &ctrl : controllers_)
-        ctrl->update(iev, event_time, game_state, cmds_);
+        ctrl->handle_event(iev, event_time, game_state, cmds_);
     }
     input_events.clear();
 
@@ -195,8 +198,8 @@ void GameManager::process_engine_events(TimePoint now,
     if (auto *pl = std::get_if<eng::PieceLocked>(&ev)) {
       ai_state_.on_piece_locked(*pl);
       mode_->on_piece_locked(*pl, game_->state(), rule_cmds);
-    } else if (std::holds_alternative<eng::GarbageMaterialized>(ev)) {
-      ai_state_.on_garbage();
+    } else if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev)) {
+      ai_state_.on_garbage(gm->lines);
     } else if (undo) {
       for (auto &ctrl : controllers_)
         ctrl->reset_input_state();
@@ -219,26 +222,12 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
     ai_state_.needs_search = false;
   }
 
-  // Feed path to AIController when plan is ready and autoplay is on
+  // Feed placement to AIController when plan is ready and autoplay is on
   if (ai_state_.autoplay && ai_state_.plan_computed() &&
-      !ai_state_.current_plan().complete() && !ai_state_.searching() &&
+      !ai_state_.current_plan().complete() && /*!ai_state_.searching() &&*/
       ai_controller_->idle()) {
     auto &step = *ai_state_.current_plan().current();
-
-    std::vector<GameInput> path;
-    if (step.uses_hold) {
-      path.push_back(GameInput::Hold);
-      auto spawn = spawn_position(step.placement.type);
-      auto moves = find_path(state.board, step.placement, spawn.x, spawn.y,
-                             Rotation::North);
-      path.insert(path.end(), moves.begin(), moves.end());
-    } else {
-      auto &piece = state.current_piece;
-      path = find_path(state.board, step.placement, piece.x, piece.y,
-                       piece.rotation);
-    }
-
-    ai_controller_->set_path(std::move(path), now, ai_state_.input_interval_ms);
+    ai_controller_->set_placement(step.placement, step.uses_hold);
   }
 }
 

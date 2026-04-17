@@ -20,7 +20,7 @@ struct GameState {
   Piece ghost_piece{PieceType::I};
   std::optional<PieceType> hold_piece;
   bool hold_available = true;
-  std::vector<PieceType> preview;
+  std::vector<PieceType> queue;
   AttackState attack_state;
   bool game_over = false;
   bool won = false;

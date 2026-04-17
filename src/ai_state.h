@@ -18,8 +18,8 @@ public:
   bool active = false;
   bool autoplay = false;
   bool needs_search = false;
-  int input_interval_ms = 250;
-  int max_visible = 7;
+  int max_visible = 7;       // plan steps shown in overlay
+  int queue_lookahead = 5;   // preview pieces fed to the beam (excludes current)
 
   // --- Read-only queries ---
   bool plan_computed() const;
@@ -37,7 +37,7 @@ public:
   void start_search(const GameState &state);
   bool poll_search(); // returns true if a search just completed
   void on_piece_locked(const eng::PieceLocked &ev);
-  void on_garbage();
+  void on_garbage(int lines);
   void on_undo();
   void deactivate();
 
