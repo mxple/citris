@@ -23,8 +23,7 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   auto ai_ctrl = std::make_unique<AIController>();
   ai_controller_ = ai_ctrl.get();
   controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(
-      std::make_unique<ToolController>(settings_, *mode_, ai_state_, *ai_controller_));
+  controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_, ai_state_));
   controllers_.push_back(std::move(ai_ctrl));
   game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
 
@@ -42,6 +41,7 @@ void GameManager::reset() {
   auto mode = ai_state_.mode;
   auto overrides = ai_state_.overrides;
   bool was_autoplay = ai_state_.autoplay;
+  bool show_debug = ai_state_.show_debug_window;
   int max_vis = ai_state_.max_visible;
   int lookahead = ai_state_.queue_lookahead;
   int interval = ai_controller_->interval_ms();
@@ -52,6 +52,7 @@ void GameManager::reset() {
   ai_state_.overrides = overrides;
   ai_state_.active = was_active;
   ai_state_.autoplay = was_autoplay;
+  ai_state_.show_debug_window = show_debug;
   ai_state_.max_visible = max_vis;
   ai_state_.queue_lookahead = lookahead;
   if (was_active)
@@ -66,8 +67,7 @@ void GameManager::reset() {
   ai_controller_->set_interval_ms(interval);
   ai_controller_->set_input_mode(input_mode);
   controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(
-      std::make_unique<ToolController>(settings_, *mode_, ai_state_, *ai_controller_));
+  controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_, ai_state_));
   controllers_.push_back(std::move(ai_ctrl));
 
   auto now = SdlClock::now();
@@ -183,7 +183,7 @@ run_start:
     for (auto &c : controllers_)
       ctrl_ptrs.push_back(c.get());
     draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
-                 ctrl_ptrs);
+                 ctrl_ptrs, &ai_state_, ai_controller_);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
@@ -263,6 +263,7 @@ ViewModel GameManager::build_view_model(TimePoint now) {
     vm.hud = std::move(hud);
 
   mode_->fill_plan_overlay(vm, vm.state);
+  ai_state_.fill_plan_overlay(vm, vm.state);
 
   for (auto &ctrl : controllers_)
     ctrl->fill_plan_overlay(vm, vm.state);

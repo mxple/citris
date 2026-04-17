@@ -41,6 +41,7 @@ public:
   }
 
   bool undo_allowed() const override { return true; }
+  bool infinite_hold() const override { return true; }
   bool auto_restart() const override { return true; }
   bool has_sidebar() const override { return true; }
 
@@ -103,9 +104,16 @@ public:
     }
   }
 
-  void on_undo(const GameState &) override {
-    if (pieces_placed_ > 0)
-      pieces_placed_--;
+  void on_undo(const GameState &state) override {
+    // Recompute from game state rather than blindly decrementing.
+    // spawn_piece() pushes snapshots for hold actions too (not just locks),
+    // so a naive decrement under-counts when a hold-self is undone.
+    int total = num_pieces_.load() + reserved_count();
+    int in_system = 1 // current piece
+                    + (state.hold_piece.has_value() ? 1 : 0)
+                    + static_cast<int>(state.queue.size());
+    pieces_placed_ = std::max(0, total - in_system);
+    no_float_ok_ = no_floating_cells(state.board);
   }
 
   // Expose the reverse-constructed downstack solution as a plan overlay.

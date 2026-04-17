@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <imgui.h>
 
+#include "ai_state.h"
+#include "controller/ai_controller.h"
 #include "controller/controller.h"
 #include "presets/game_mode.h"
 
@@ -58,31 +60,58 @@ CellLayout compute_cell_layout(SDL_Window *window, const Settings &settings,
   SDL_GetWindowSize(window, &win_w, &win_h);
   float W = static_cast<float>(win_w);
   float H = static_cast<float>(win_h);
-  float avail_w = W - sidebar_w;
   CellLayout layout{};
+
+  // Size cells against the full window, ignoring the sidebar — keeps the
+  // board's size stable as the sidebar opens, closes, or is resized.
   if (settings.auto_scale)
-    layout.cell_px = std::min(avail_w / float(L::kSceneCols), H / float(L::kSceneRows));
+    layout.cell_px =
+        std::min(W / float(L::kSceneCols), H / float(L::kSceneRows));
   else
     layout.cell_px = static_cast<float>(L::kTileSize) * settings.scale_factor;
   float layout_w = layout.cell_px * L::kSceneCols;
   float layout_h = layout.cell_px * L::kSceneRows;
-  layout.origin_x = sidebar_w + (avail_w - layout_w) * 0.5f;
+
+  float centered_x = (W - layout_w) * 0.5f;
+  if (centered_x >= sidebar_w) {
+    // No overlap — leave the board centered in the full window.
+    layout.origin_x = centered_x;
+  } else if (sidebar_w + layout_w <= W) {
+    // Sidebar would overlap; push right just enough to clear it.
+    layout.origin_x = sidebar_w;
+  } else {
+    // Board cannot fit alongside the sidebar at the chosen size — fall
+    // back to fitting whatever space remains (auto_scale only).
+    if (settings.auto_scale) {
+      float avail_w = W - sidebar_w;
+      layout.cell_px = std::min(avail_w / float(L::kSceneCols),
+                                H / float(L::kSceneRows));
+      layout_w = layout.cell_px * L::kSceneCols;
+      layout_h = layout.cell_px * L::kSceneRows;
+    }
+    layout.origin_x = sidebar_w + (W - sidebar_w - layout_w) * 0.5f;
+  }
   layout.origin_y = (H - layout_h) * 0.5f;
   return layout;
 }
 
-// Draws the left sidebar panel and returns its width.
-// The sidebar is resizable, collapsible, and auto-collapses when empty.
+// Draws the left sidebar panel and returns the total horizontal space it
+// occupies (sidebar contents + the full-height toggle/resize handle that
+// always sits on its right edge).
 float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
-                         std::span<IController *> ctrls) {
+                         std::span<IController *> ctrls, AIState *ai,
+                         AIController *ai_ctrl) {
   static bool s_open = true;
   static bool s_prev_had_content = false;
   static float s_width = 0.f;
+  static bool s_dragging = false;
 
   bool has_content = (mode && mode->has_sidebar());
   if (!has_content)
     for (auto *c : ctrls)
       if (c->has_sidebar()) { has_content = true; break; }
+  if (!has_content && ai && ai->has_sidebar())
+    has_content = true;
 
   if (!has_content)
     s_open = false;
@@ -90,72 +119,90 @@ float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
     s_open = true;  // content just appeared — auto-expand
   s_prev_had_content = has_content;
 
+  if (!has_content) return 0.f;
+
   int win_w = 0, win_h = 0;
   SDL_GetWindowSize(window, &win_w, &win_h);
   float W = float(win_w), H = float(win_h);
 
   constexpr float kDefaultWidth = 220.f;
-  constexpr float kToggleWidth = 24.f;
-
-  if (!s_open) {
-    if (!has_content) return 0.f;
-
-    // Narrow strip with an expand arrow when hidden but has content
-    constexpr ImGuiWindowFlags kStripFlags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoSavedSettings;
-    ImGui::SetNextWindowPos({0.f, 0.f});
-    ImGui::SetNextWindowSize({kToggleWidth, H});
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2.f, 4.f));
-    ImGui::Begin("##sidebar_toggle", nullptr, kStripFlags);
-    ImGui::PopStyleVar();
-    if (ImGui::ArrowButton("##expand", ImGuiDir_Right))
-      s_open = true;
-    ImGui::End();
-    return kToggleWidth;
-  }
-
+  constexpr float kHandleWidth = 10.f;
   if (s_width <= 0.f) s_width = kDefaultWidth;
+  s_width = std::clamp(s_width, 100.f, W * 0.5f);
 
-  constexpr ImGuiWindowFlags kFlags =
-      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
-      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-      ImGuiWindowFlags_NoSavedSettings;
-
-  ImGui::SetNextWindowPos({0.f, 0.f}, ImGuiCond_Always);
-  // Lock height to window height; constrain width to a sane range
-  ImGui::SetNextWindowSizeConstraints({100.f, H}, {W * 0.5f, H});
-  ImGui::SetNextWindowSize({s_width, H}, ImGuiCond_Always);
-  ImGui::Begin("##sidebar", nullptr, kFlags);
-  // Capture user resize: drag delta is applied after SetWindowSize, so
-  // GetWindowWidth() reflects the cumulative resize each frame.
-  s_width = ImGui::GetWindowWidth();
-
-  // Collapse button — right-aligned, before content
-  {
-    float btn_sz = ImGui::GetFrameHeight();
-    ImGui::SetCursorPosX(ImGui::GetWindowWidth() -
-                         ImGui::GetStyle().WindowPadding.x - btn_sz);
-    if (ImGui::ArrowButton("##collapse", ImGuiDir_Left))
-      s_open = false;
-    ImGui::Separator();
+  float content_w = 0.f;
+  if (s_open) {
+    constexpr ImGuiWindowFlags kFlags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::SetNextWindowPos({0.f, 0.f}, ImGuiCond_Always);
+    ImGui::SetNextWindowSize({s_width, H}, ImGuiCond_Always);
+    ImGui::Begin("##sidebar", nullptr, kFlags);
+    if (mode) mode->draw_sidebar();
+    for (auto *c : ctrls) c->draw_sidebar();
+    if (ai && ai_ctrl) ai->draw_sidebar(*ai_ctrl);
+    ImGui::End();
+    content_w = s_width;
   }
 
-  if (mode) mode->draw_sidebar();
-  for (auto *c : ctrls) c->draw_sidebar();
+  // Full-height vertical handle on the right edge of the sidebar.
+  // Click toggles open/closed; drag (when open) resizes the sidebar.
+  constexpr ImGuiWindowFlags kHandleFlags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground;
+  ImGui::SetNextWindowPos({content_w, 0.f}, ImGuiCond_Always);
+  ImGui::SetNextWindowSize({kHandleWidth, H}, ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+  ImGui::Begin("##sidebar_handle", nullptr, kHandleFlags);
+
+  ImVec2 p0 = ImGui::GetCursorScreenPos();
+  ImGui::InvisibleButton("##hit", ImVec2(kHandleWidth, H));
+  bool hovered = ImGui::IsItemHovered();
+  bool active = ImGui::IsItemActive();
+
+  if (active) {
+    if (s_open && std::abs(ImGui::GetMouseDragDelta(0).x) > 4.f)
+      s_dragging = true;
+    if (s_dragging)
+      s_width = std::clamp(s_width + ImGui::GetIO().MouseDelta.x,
+                           100.f, W * 0.5f);
+  }
+  if (ImGui::IsItemDeactivated()) {
+    if (!s_dragging) s_open = !s_open;
+    s_dragging = false;
+  }
+
+  if (s_open && (hovered || active))
+    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+  ImU32 bg = (hovered || active)
+                 ? ImGui::GetColorU32(ImGuiCol_ButtonHovered)
+                 : ImGui::GetColorU32(ImGuiCol_Button);
+  auto *dl = ImGui::GetWindowDrawList();
+  dl->AddRectFilled(p0, ImVec2(p0.x + kHandleWidth, p0.y + H), bg);
+  const char *arrow = s_open ? "<" : ">";
+  ImVec2 ts = ImGui::CalcTextSize(arrow);
+  dl->AddText(ImVec2(p0.x + (kHandleWidth - ts.x) * 0.5f,
+                     p0.y + (H - ts.y) * 0.5f),
+              ImGui::GetColorU32(ImGuiCol_Text), arrow);
 
   ImGui::End();
-  return s_width;
+  ImGui::PopStyleVar(2);
+
+  return content_w + kHandleWidth;
 }
 
 } // namespace
 
 void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
                    const Settings &settings, GameMode *mode,
-                   std::span<IController *> ctrls) {
-  float sidebar_w = draw_sidebar_panel(window, mode, ctrls);
+                   std::span<IController *> ctrls, AIState *ai,
+                   AIController *ai_ctrl) {
+  float sidebar_w = draw_sidebar_panel(window, mode, ctrls, ai, ai_ctrl);
   CellLayout layout = compute_cell_layout(window, settings, sidebar_w);
   if (layout.cell_px <= 0.f)
     return;
