@@ -3,7 +3,8 @@
 #include "command.h"
 #include "engine_event.h"
 #include "engine/game_state.h"
-#include "engine/bag.h"
+#include "engine/piece_queue.h"
+#include "engine/piece_source.h"
 #include "render/view_model.h"
 #include <chrono>
 #include <memory>
@@ -36,8 +37,8 @@ public:
   virtual bool hold_allowed() const { return true; }
   virtual bool undo_allowed() const { return true; }
   virtual std::optional<EvalType> default_eval_type() const { return std::nullopt; }
-  virtual std::unique_ptr<BagRandomizer> create_bag(unsigned seed) const {
-    return std::make_unique<SevenBagRandomizer>(seed);
+  virtual PieceQueue create_queue(unsigned seed) const {
+    return PieceQueue(std::make_unique<SevenBagSource>(seed));
   }
   virtual bool auto_restart() const { return false; }
 

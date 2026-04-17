@@ -5,8 +5,8 @@
 #include "profiler.h"
 
 Game::Game(const GameMode &mode, Board board, unsigned seed)
-    : mode_(mode), board_(std::move(board)) {
-  bag_ = mode_.create_bag(seed);
+    : mode_(mode), board_(std::move(board)),
+      queue_(mode_.create_queue(seed)) {
   now_ = SdlClock::now();
   spawn_piece();
 }
@@ -74,12 +74,12 @@ GameState Game::state() const {
       .ghost_piece = compute_ghost(),
       .hold_piece = hold_piece_,
       .hold_available = hold_available_,
-      .queue = bag_->preview(16), // 16 for 6 line PC solves
+      .queue = queue_.peek(16), // 16 for 6 line PC solves
       .attack_state = attack_state_,
       .game_over = game_over_,
       .won = won_,
       .piece_gen = piece_gen_,
-      .bag_draws = bag_->draws(),
+      .queue_draws = queue_.draws(),
       .lines_cleared = lines_cleared_,
       .total_attack = total_attack_,
       .last_clear = last_clear_,
@@ -321,13 +321,14 @@ void Game::handle_undo() {
 }
 
 void Game::spawn_piece() {
-  if (bag_->preview(1).empty()) {
+  auto next = queue_.pop();
+  if (!next) {
     if (!hold_piece_)
       return; // queue + hold exhausted — mode handles via on_piece_locked
     current_piece_ = Piece(*hold_piece_);
     hold_piece_.reset();
   } else {
-    current_piece_ = Piece(bag_->next());
+    current_piece_ = Piece(*next);
   }
   piece_gen_++;
   lock_resets_remaining_ = mode_.max_lock_resets();
@@ -409,7 +410,7 @@ void Game::push_snapshot() {
       game_over_,
       won_,
       last_move_was_rotation_,
-      bag_->snapshot(),
+      queue_.snapshot(),
   });
 }
 
@@ -429,7 +430,7 @@ void Game::restore_snapshot(const GameSnapshot &snap) {
   game_over_ = snap.game_over;
   won_ = snap.won;
   last_move_was_rotation_ = snap.last_move_was_rotation;
-  bag_->restore(snap.bag_snapshot);
+  queue_.restore(snap.queue_snapshot);
 
   gravity_deadline_.reset();
   lock_delay_deadline_.reset();

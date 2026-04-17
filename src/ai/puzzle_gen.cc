@@ -572,6 +572,9 @@ std::optional<PuzzleResult> generate_puzzle(const PuzzleRequest &req,
 
     PuzzleResult result;
     result.board = work.to_board();
+    // Returns the queue in PLAY order. Consumers wanting the hold-shuffle
+    // disguise (matches script7.js:991) call PieceQueue::shuffle on the
+    // resulting queue — see TSpinPracticeMode::create_queue.
     result.queue = build_queue(placed, local);
     result.solution = build_solution(placed);
     return result;

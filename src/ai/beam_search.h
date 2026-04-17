@@ -16,7 +16,7 @@ struct BeamInput {
   std::vector<PieceType> queue; // queue[0] = current piece
   std::optional<PieceType> hold;
   bool hold_available = true;
-  int bag_draws = 0;
+  int queue_draws = 0;
 };
 
 struct BeamConfig {

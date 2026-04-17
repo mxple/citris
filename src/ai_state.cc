@@ -61,7 +61,7 @@ void AIState::start_search(const GameState &state) {
     input.queue.push_back(state.queue[i]);
   input.hold = state.hold_piece;
   input.hold_available = state.hold_available;
-  input.bag_draws = state.bag_draws;
+  input.queue_draws = state.queue_draws;
 
   last_input_ = input; // copy saved before any move
 

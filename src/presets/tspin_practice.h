@@ -4,7 +4,8 @@
 #include "ai/plan.h"
 #include "ai/plan_overlay.h"
 #include "ai/puzzle_gen.h"
-#include "engine/bag.h"
+#include "engine/piece_queue.h"
+#include "engine/piece_source.h"
 #include "engine/board.h"
 #include "game_mode.h"
 #include "puzzle_bank.h"
@@ -45,8 +46,14 @@ public:
   bool auto_restart() const override { return true; }
   bool has_sidebar() const override { return true; }
 
-  std::unique_ptr<BagRandomizer> create_bag(unsigned seed) const override {
-    return std::make_unique<FixedQueueRandomizer>(current_.queue, seed);
+  PieceQueue create_queue(unsigned seed) const override {
+    // Puzzle pieces are pre-loaded into the buffer; the source is exhausted
+    // (no further pieces beyond the puzzle). Then we hold-shuffle the
+    // buffer so the player has to use hold to recover the solution order.
+    PieceQueue q(std::make_unique<EmptySource>(), current_.queue);
+    std::mt19937 shuffle_rng{seed};
+    q.shuffle(PieceQueue::ShufflePolicy::HoldEquivalent, shuffle_rng);
+    return q;
   }
 
   void on_start(TimePoint now) override {

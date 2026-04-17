@@ -158,16 +158,16 @@ void AI::reroot(uint32_t new_root) {
 // ---------------------------------------------------------------------------
 
 // Compute which pieces remain in the current 7-bag after the known queue is
-// exhausted.  bag_draws = total next() calls so far (from Game).  queue[0] is
-// the current piece (already drawn); queue[1..] are preview pieces (next draws).
-// After the full queue, total draws = bag_draws + queue.size() - 1.
-// The last (total_draws % 7) entries of the queue belong to the current
+// exhausted.  queue_draws = total pop() calls so far (from Game).  queue[0]
+// is the current piece (already drawn); queue[1..] are preview pieces (next
+// draws). After the full queue, total draws = queue_draws + queue.size() -
+// 1. The last (total_draws % 7) entries of the queue belong to the current
 // partial bag.
 static uint8_t compute_initial_bag(std::span<const PieceType> queue,
-                                   int bag_draws) {
+                                   int queue_draws) {
   if (queue.empty())
     return 0x7F;
-  int total_draws = bag_draws + static_cast<int>(queue.size()) - 1;
+  int total_draws = queue_draws + static_cast<int>(queue.size()) - 1;
   int tail = total_draws % 7;
   if (tail == 0)
     return 0x7F; // queue ends exactly at a bag boundary
@@ -473,7 +473,7 @@ void AI::run_search(std::span<const PieceType> queue,
     return;
 
   if (config_.extend_queue_7bag)
-    root_state_.bag_remaining = compute_initial_bag(queue, root_state_.bag_draws);
+    root_state_.bag_remaining = compute_initial_bag(queue, root_state_.queue_draws);
 
   init_beam_from_root();
 

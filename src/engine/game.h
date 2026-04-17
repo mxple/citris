@@ -5,7 +5,7 @@
 #include "command.h"
 #include "engine_event.h"
 #include "game_state.h"
-#include "engine/bag.h"
+#include "engine/piece_queue.h"
 #include <deque>
 #include <optional>
 #include <vector>
@@ -78,7 +78,7 @@ private:
     bool game_over;
     bool won;
     bool last_move_was_rotation;
-    BagRandomizer::BagSnapshot bag_snapshot;
+    PieceQueue::Snapshot queue_snapshot;
   };
 
   void restore_snapshot(const GameSnapshot &snap);
@@ -93,7 +93,10 @@ private:
   bool hold_available_ = true;
   bool last_move_was_rotation_ = false;
   AttackState attack_state_;
-  std::unique_ptr<BagRandomizer> bag_;
+  // Mutable: peek() lazily refills the buffer from the source, which is a
+  // logical-state cache (not part of observable game state), so const
+  // accessors like state() can call queue_.peek().
+  mutable PieceQueue queue_;
   int lock_resets_remaining_ = 0;
 
   std::vector<PendingGarbage> pending_garbage_;

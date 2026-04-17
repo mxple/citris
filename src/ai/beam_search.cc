@@ -29,7 +29,7 @@ BeamTask::BeamTask(BeamInput input, BeamConfig cfg)
   root.board = input.board;
   root.hold = input.hold;
   root.hold_available = input.hold_available;
-  root.bag_draws = input.bag_draws;
+  root.queue_draws = input.queue_draws;
   impl.ai.reset(root);
 
   impl.queue = std::move(input.queue);

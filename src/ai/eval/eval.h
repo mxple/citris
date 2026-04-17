@@ -42,7 +42,7 @@ struct SearchState {
   bool hold_available = true;
   uint8_t bag_remaining = 0x7F;
   int queue_idx = 0;
-  int bag_draws = 0;  // total next() calls at root — for bag boundary calc
+  int queue_draws = 0;  // total pop() calls at root — for bag boundary calc
   PieceCounts used_counts{};
 };
 
