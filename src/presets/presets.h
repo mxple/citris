@@ -4,6 +4,7 @@
 #include "cheese.h"
 #include "freeplay.h"
 #include "sprint.h"
+#include "tspin_practice.h"
 #include "user_mode.h"
 #include <filesystem>
 #include <memory>
@@ -15,6 +16,10 @@ inline std::vector<std::unique_ptr<GameMode>> all_modes() {
   modes.push_back(std::make_unique<SprintMode>());
   modes.push_back(std::make_unique<BlitzMode>());
   modes.push_back(std::make_unique<CheeseMode>());
+  modes.push_back(
+      std::make_unique<TSpinPracticeMode>(5, TSpinVariant::TSD));
+  modes.push_back(
+      std::make_unique<TSpinPracticeMode>(5, TSpinVariant::TSDQuad));
   return modes;
 }
 

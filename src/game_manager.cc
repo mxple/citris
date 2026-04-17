@@ -162,6 +162,12 @@ run_start:
       goto run_start;
     }
 
+    // Mode-requested restart (e.g. debug-window buttons).
+    if (mode_->consume_restart_request()) {
+      reset();
+      goto run_start;
+    }
+
     // 5. Render: ImGui frame + embedded board texture
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -169,6 +175,7 @@ run_start:
 
     for (auto &ctrl : controllers_)
       ctrl->draw_imgui();
+    mode_->draw_imgui();
 
     ViewModel vm = build_view_model(now);
     draw_game_ui(*game_renderer_, window_, vm, settings_);

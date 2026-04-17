@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/placement.h"
 #include "engine/board.h"
 #include "engine/piece.h"
 #include <atomic>
@@ -14,6 +15,10 @@
 struct GeneratedSetup {
   Board board;
   std::vector<PieceType> queue;
+  // Exact placements in forward-play order for the N downstack pieces.
+  // Empty for modes that don't have a known solution (e.g., 7-bag + goal).
+  // Populated by reverse-construction puzzle generators.
+  std::vector<Placement> solution;
 };
 
 // Pre-generates puzzles in a background thread. Modes pop on restart.
@@ -52,6 +57,20 @@ public:
   bool has_setup() const {
     std::lock_guard lock(mutex_);
     return !pool_.empty();
+  }
+
+  size_t pool_size() const {
+    std::lock_guard lock(mutex_);
+    return pool_.size();
+  }
+
+  int target_size() const { return target_size_; }
+
+  // Drop all pre-generated setups. Worker wakes and refills.
+  void clear_pool() {
+    std::lock_guard lock(mutex_);
+    pool_.clear();
+    cv_.notify_one();
   }
 
 private:

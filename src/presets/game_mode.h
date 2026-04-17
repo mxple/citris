@@ -55,6 +55,13 @@ public:
   virtual void fill_hud(HudData &, const GameState &, TimePoint) {}
   virtual void fill_plan_overlay(ViewModel &, const GameState &) {}
 
+  // Per-frame ImGui window(s) owned by the mode (e.g. debug controls).
+  virtual void draw_imgui() {}
+
+  // Drain-and-clear a restart request from the mode (e.g. set by a debug
+  // button). Polled by the manager next to auto_restart().
+  virtual bool consume_restart_request() { return false; }
+
 protected:
   TimePoint start_time_;
   std::optional<TimePoint> end_time_;

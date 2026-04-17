@@ -321,10 +321,14 @@ void Game::handle_undo() {
 }
 
 void Game::spawn_piece() {
-  if (bag_->preview(1).empty())
-    return; // finite queue exhausted — mode handles via on_piece_locked
-
-  current_piece_ = Piece(bag_->next());
+  if (bag_->preview(1).empty()) {
+    if (!hold_piece_)
+      return; // queue + hold exhausted — mode handles via on_piece_locked
+    current_piece_ = Piece(*hold_piece_);
+    hold_piece_.reset();
+  } else {
+    current_piece_ = Piece(bag_->next());
+  }
   piece_gen_++;
   lock_resets_remaining_ = mode_.max_lock_resets();
   last_move_was_rotation_ = false;
