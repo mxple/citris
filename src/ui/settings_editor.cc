@@ -112,6 +112,11 @@ SDL_Keycode imgui_key_to_sdl(ImGuiKey k) {
   case ImGuiKey_RightAlt:     return SDLK_RALT;
   case ImGuiKey_LeftSuper:    return SDLK_LGUI;
   case ImGuiKey_RightSuper:   return SDLK_RGUI;
+  // Arrow keys: ImGui names them "LeftArrow" etc., SDL expects "Left" etc.
+  case ImGuiKey_LeftArrow:    return SDLK_LEFT;
+  case ImGuiKey_RightArrow:   return SDLK_RIGHT;
+  case ImGuiKey_UpArrow:      return SDLK_UP;
+  case ImGuiKey_DownArrow:    return SDLK_DOWN;
   // Punctuation: ImGui uses full English names, SDL_GetKeyFromName expects
   // the single character string (e.g. "`" not "GraveAccent").
   case ImGuiKey_GraveAccent:  return SDLK_GRAVE;
@@ -134,11 +139,11 @@ void SettingsEditor::draw() {
   Binding bindings[] = {
       {"Move Left", &settings_.move_left},
       {"Move Right", &settings_.move_right},
-      {"Rotate CW", &settings_.rotate_cw},
-      {"Rotate CCW", &settings_.rotate_ccw},
-      {"Rotate 180", &settings_.rotate_180},
-      {"Hard Drop", &settings_.hard_drop},
       {"Soft Drop", &settings_.soft_drop},
+      {"Hard Drop", &settings_.hard_drop},
+      {"Rotate CCW", &settings_.rotate_ccw},
+      {"Rotate CW", &settings_.rotate_cw},
+      {"Rotate 180", &settings_.rotate_180},
       {"Hold", &settings_.hold},
       {"Undo", &settings_.undo},
       {"Reset Game", &settings_.reset_game},
@@ -225,10 +230,10 @@ void SettingsEditor::draw() {
   }
 
   ImGui::SeparatorText("Input Tuning");
-  int_row("DAS (ms)", &das_ms_);
-  int_row("ARR (ms)", &arr_ms_);
-  int_row("Soft Drop Interval (ms)", &soft_drop_ms_);
-  int_row("Hard Drop Delay (ms)", &hard_drop_delay_ms_);
+  slider_row("DAS (ms)", &das_ms_, 0, 250);
+  slider_row("ARR (ms)", &arr_ms_, 0, 50);
+  slider_row("Soft Drop Interval (ms)", &soft_drop_ms_, 0, 50);
+  slider_row("Hard Drop Delay (ms)", &hard_drop_delay_ms_, 0, 250);
   bool_row("DAS Preserve Charge", &settings_.das_preserve_charge);
 
   ImGui::SeparatorText("Rendering");
