@@ -14,9 +14,10 @@
 
 GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
                          const Settings &settings,
-                         std::unique_ptr<GameMode> mode)
+                         std::unique_ptr<GameMode> mode,
+                         std::unique_ptr<GameMode> mode2)
     : renderer_(renderer), window_(window), settings_(settings),
-      mode_(std::move(mode)) {
+      mode_(std::move(mode)), mode2_(std::move(mode2)) {
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
@@ -29,13 +30,24 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
 
   auto now = SdlClock::now();
   mode_->on_start(now);
-
   game_->drain_events();
+
+  if (mode2_) {
+    Board board2;
+    mode2_->setup_board(board2);
+    game2_ = std::make_unique<Game>(*mode2_, std::move(board2));
+    mode2_->on_start(now);
+    game2_->drain_events();
+    // Phase 1: controllers2_ stays empty. Phase 4 will populate it with a
+    // TbpController driving the AI opponent.
+  }
 }
 
 void GameManager::reset() {
   stats_.reset();
   cmds_.clear();
+  cmds2_.clear();
+  match_state_ = MatchState{};
 
   ai_state_.clear_search_state();
   if (ai_state_.active)
@@ -53,6 +65,16 @@ void GameManager::reset() {
 
   for (auto &ev : game_->drain_events())
     stats_.process_event(ev, now);
+
+  if (mode2_) {
+    Board board2;
+    mode2_->setup_board(board2);
+    game2_ = std::make_unique<Game>(*mode2_, std::move(board2));
+    for (auto &ctrl : controllers2_)
+      ctrl->reset_input_state();
+    mode2_->on_start(now);
+    game2_->drain_events();
+  }
 }
 
 bool GameManager::run() {
@@ -94,6 +116,11 @@ run_start:
     auto game_state = game_->state();
     for (auto &ctrl : controllers_)
       ctrl->tick(now, game_state, cmds_);
+    if (game2_) {
+      auto game2_state = game2_->state();
+      for (auto &ctrl : controllers2_)
+        ctrl->tick(now, game2_state, cmds2_);
+    }
     for (auto &iev : input_events) {
       if (std::holds_alternative<WindowClose>(iev)) {
         running_ = false;
@@ -121,16 +148,37 @@ run_start:
     game_->apply(cmds_);
     game_->tick(now);
     cmds_.clear();
+    if (game2_) {
+      game2_->apply(cmds2_);
+      game2_->tick(now);
+      cmds2_.clear();
+    }
 
     // 4. Drain engine events + pump AI
     CommandBuffer rule_cmds;
+    CommandBuffer rule_cmds2;
     process_engine_events(now, rule_cmds);
+    if (game2_)
+      process_p2_events(now, rule_cmds2);
     pump_ai(now, game_->state());
+
+    // 4b. Route garbage between games (after both have drained), then snapshot
+    // winner state. Both rule_cmds buffers may receive an AddGarbage command
+    // here — applied alongside any mode-generated rule commands below.
+    if (game2_) {
+      route_garbage_between(*game_, *game2_, rule_cmds, rule_cmds2, gap_rng_);
+      update_match_state(match_state_, *game_, game2_.get());
+    }
 
     if (!rule_cmds.empty()) {
       game_->apply(rule_cmds);
       CommandBuffer discard;
       process_engine_events(now, discard);
+    }
+    if (game2_ && !rule_cmds2.empty()) {
+      game2_->apply(rule_cmds2);
+      CommandBuffer discard2;
+      process_p2_events(now, discard2);
     }
 
     // Auto-restart on win for training modes
@@ -221,13 +269,17 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
   }
 }
 
-void GameManager::route_garbage(TimePoint now, CommandBuffer &cmds) {
-  if (!game2_)
-    return;
-
-  int attack1 = game_->drain_attack();
-  if (attack1 > 0)
-    cmds.push(cmd::AddGarbage{attack1, 0});
+void GameManager::process_p2_events(TimePoint now, CommandBuffer &rule_cmds) {
+  // Phase 1: game2 has no Stats / AIState / undo handling. Drain events,
+  // forward to controllers2_ (empty for now) and let mode2_ react.
+  auto events = game2_->drain_events();
+  for (auto &ev : events) {
+    for (auto &ctrl : controllers2_)
+      ctrl->notify(ev, now);
+    if (auto *pl = std::get_if<eng::PieceLocked>(&ev))
+      mode2_->on_piece_locked(*pl, game2_->state(), rule_cmds);
+  }
+  mode2_->on_tick(now, game2_->state(), rule_cmds);
 }
 
 ViewModel GameManager::build_view_model(TimePoint now) {
