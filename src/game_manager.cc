@@ -37,38 +37,16 @@ void GameManager::reset() {
   stats_.reset();
   cmds_.clear();
 
-  bool was_active = ai_state_.active;
-  auto mode = ai_state_.mode;
-  auto overrides = ai_state_.overrides;
-  bool was_autoplay = ai_state_.autoplay;
-  bool show_debug = ai_state_.show_debug_window;
-  int max_vis = ai_state_.max_visible;
-  int lookahead = ai_state_.queue_lookahead;
-  int interval = ai_controller_->interval_ms();
-  AIInputMode input_mode = ai_controller_->input_mode();
-
-  ai_state_.deactivate();
-  ai_state_.mode = mode;
-  ai_state_.overrides = overrides;
-  ai_state_.active = was_active;
-  ai_state_.autoplay = was_autoplay;
-  ai_state_.show_debug_window = show_debug;
-  ai_state_.max_visible = max_vis;
-  ai_state_.queue_lookahead = lookahead;
-  if (was_active)
+  ai_state_.clear_search_state();
+  if (ai_state_.active)
     ai_state_.needs_search = true;
 
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
-  controllers_.clear();
-  auto ai_ctrl = std::make_unique<AIController>();
-  ai_controller_ = ai_ctrl.get();
-  ai_controller_->set_interval_ms(interval);
-  ai_controller_->set_input_mode(input_mode);
-  controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_, ai_state_));
-  controllers_.push_back(std::move(ai_ctrl));
+
+  for (auto &ctrl : controllers_)
+    ctrl->reset_input_state();
 
   auto now = SdlClock::now();
   mode_->on_start(now);

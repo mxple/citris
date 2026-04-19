@@ -43,7 +43,8 @@ public:
   void on_piece_locked(const eng::PieceLocked &ev);
   void on_garbage(int lines);
   void on_undo();
-  void deactivate();
+  void clear_search_state(); // tasks + plan + needs_search; preserves config
+  void deactivate();         // clear_search_state() + flips active/autoplay off
 
   // --- Rendering ---
   bool has_sidebar() const { return show_debug_window; }

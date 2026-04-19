@@ -150,12 +150,16 @@ void AIState::on_undo() {
   needs_search = true;
 }
 
-void AIState::deactivate() {
+void AIState::clear_search_state() {
   beam_task_.reset();
   pc_task_.reset();
   plan_ = Plan{};
   plan_source_ = PlanSource::None;
   needs_search = false;
+}
+
+void AIState::deactivate() {
+  clear_search_state();
   autoplay = false;
   active = false;
 }
