@@ -131,10 +131,7 @@ class TSpinPracticeMode : public GameMode {
 public:
   explicit TSpinPracticeMode(int num_pieces = 5,
                              TSpinVariant variant = TSpinVariant::TSD)
-      : num_pieces_(num_pieces), slider_pieces_(num_pieces), variant_(variant) {
-    bank_ = std::make_unique<PuzzleBank>(
-        [this](std::mt19937 &rng) { return generate(rng); });
-  }
+      : num_pieces_(num_pieces), slider_pieces_(num_pieces), variant_(variant) {}
 
   std::string title() const override { return variant_spec(variant_).title; }
 
@@ -166,6 +163,7 @@ public:
   }
 
   void setup_board(Board &board) override {
+    ensure_bank();
     if (!has_current_ || last_was_win_) {
       std::optional<GeneratedSetup> s = bank_->pop();
       if (!s) {
@@ -283,6 +281,7 @@ public:
     if (!ImGui::CollapsingHeader(title().c_str(),
                                  ImGuiTreeNodeFlags_DefaultOpen))
       return;
+    ensure_bank();
 
     // Goal list — shows the active variant's win criteria with live
     // progress markers so the player can verify what's scored and what's
@@ -358,6 +357,16 @@ public:
   }
 
 private:
+  // Lazy — the menu constructs all 5 TSpin variants just to read their
+  // titles, so eager construction would burn a pool worker per variant
+  // (PTHREAD_POOL_SIZE=6 isn't enough). Created on first setup/draw call,
+  // once the mode is actually in use.
+  void ensure_bank() {
+    if (!bank_)
+      bank_ = std::make_unique<PuzzleBank>(
+          [this](std::mt19937 &rng) { return generate(rng); });
+  }
+
   // Force setup_board to pull a new puzzle (instead of replaying current_)
   // and ask the manager to reset the game on the next frame.
   void request_fresh_puzzle() {
@@ -377,7 +386,14 @@ private:
                       : (d == 2) ? true
                                  : s.allow_skims_default;
     req.smooth_surface = true;
-    req.unique_pieces = 1;
+    // Reserved pieces are excluded from the reverse-construction pool.
+    // TSDQuad reserves {T, I} → only 5 allowed types; at num_pieces=6 the
+    // unique=1 budget is infeasible and the generator hangs retrying.
+    std::array<bool, 7> banned{};
+    for (PieceType r : s.reserved) banned[static_cast<int>(r)] = true;
+    int allowed_types = 0;
+    for (bool b : banned) if (!b) ++allowed_types;
+    req.unique_pieces = (req.num_pieces > allowed_types) ? 2 : 1;
     req.max_non_cheese_holes = s.max_non_cheese_holes;
     req.reserved = s.reserved;
     int cheese_lo = (d == 2) ? s.garbage_below_max : s.garbage_below_min;
