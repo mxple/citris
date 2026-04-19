@@ -52,7 +52,10 @@ struct SearchState {
 
 struct Evaluator {
   virtual ~Evaluator() = default;
-  virtual float board_eval(const BoardBitset &board) const = 0;
+  // Takes the full post-move state so evaluators can gate features by
+  // resources (hold, bag_remaining) — e.g. AtkEvaluator only rewards T-slots
+  // when a T is reachable in the current bag or hold.
+  virtual float board_eval(const SearchState &state) const = 0;
   virtual float tactical_eval(const Placement &move, int lines_cleared,
                               int attack, const SearchState &parent) const = 0;
   virtual float composite(float board_score, float tactical_score,

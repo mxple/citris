@@ -24,6 +24,13 @@ public:
   bool show_debug_window = false;
   int max_visible = 7;       // plan steps shown in overlay
   int queue_lookahead = 5;   // preview pieces fed to the beam (excludes current)
+  // Autoplay commit window. After this many plan steps have been played,
+  // invalidate the remaining plan and request a re-search. Trims the
+  // speculative tail of long PVs (where bag-extension speculation
+  // produces over-optimistic moves). 0 = play the whole plan (legacy
+  // behavior). Typical good values: 2-4 — keeps the high-confidence head
+  // of each search and discards the lower-confidence tail.
+  int plan_commit_limit = 0;
 
   // --- Read-only queries ---
   bool plan_computed() const;
@@ -63,6 +70,18 @@ private:
 
   // Saved at start_search time — used for plan building and PC fallback
   BeamInput last_input_;
+
+  // --- Debug: last move + current board snapshots for the Player Eval
+  // panel. `last_board_` is refreshed every frame in fill_plan_overlay (so
+  // it's "current" at draw time). `parent_board_` captures that snapshot
+  // at the moment a piece locks — i.e., the board BEFORE the locked move
+  // was placed — which is what tactical_eval wants as its parent state.
+  mutable BoardBitset last_board_{};
+  BoardBitset parent_board_{};
+  eng::PieceLocked last_move_{};
+  bool has_last_move_ = false;
+  int tracked_b2b_ = 0;      // rolling; updated each PieceLocked to ev.new_b2b
+  int parent_b2b_ = 0;       // snapshot of tracked_b2b_ BEFORE the last move
 
   void build_plan_from_beam(const BeamResult &result);
   void build_plan_from_pc(const PcResult &result);

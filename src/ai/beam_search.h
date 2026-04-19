@@ -17,6 +17,10 @@ struct BeamInput {
   std::optional<PieceType> hold;
   bool hold_available = true;
   int queue_draws = 0;
+  // Live attack state (combo, b2b) at search root. Without this the beam
+  // plans as if b2b=0 — meaning it doesn't see B2B-breaking skims as bad
+  // (no chain to break in the search's worldview).
+  AttackState attack{};
 };
 
 struct BeamConfig {

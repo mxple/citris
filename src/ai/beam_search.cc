@@ -30,6 +30,7 @@ BeamTask::BeamTask(BeamInput input, BeamConfig cfg)
   root.hold = input.hold;
   root.hold_available = input.hold_available;
   root.queue_draws = input.queue_draws;
+  root.attack = input.attack;
   impl.ai.reset(root);
 
   impl.queue = std::move(input.queue);

@@ -245,7 +245,7 @@ void AI::try_piece(const BeamNode &parent, PieceType piece,
     cs.queue_idx = child_queue_idx;
 
     // Evaluate
-    float board_score = eval_->board_eval(board);
+    float board_score = eval_->board_eval(cs);
     float tactical = eval_->tactical_eval(m, cleared, atk, parent.state);
     float cum_tactical = parent.cumulative_tactical + tactical;
     float eff_tactical =

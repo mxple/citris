@@ -5,9 +5,9 @@
 // Evaluator for sprint mode — minimize inputs while clearing 40 lines.
 class SprintEvaluator : public Evaluator {
 public:
-  float board_eval(const BoardBitset &board) const override {
+  float board_eval(const SearchState &state) const override {
     // Sprint wants a clean, flat, low board to enable quads.
-    return board_eval_default(board, w_);
+    return board_eval_default(state.board, w_);
   }
 
   float tactical_eval(const Placement &move, int lines_cleared, int attack,

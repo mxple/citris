@@ -5,10 +5,10 @@
 // Evaluator for cheese/downstack mode — rewards line clears and clean boards.
 class CheeseEvaluator : public Evaluator {
 public:
-  float board_eval(const BoardBitset &board) const override {
+  float board_eval(const SearchState &state) const override {
     // Cheese boards start with holes — heavily penalize remaining holes
     // and covered cells to guide the AI toward clearing garbage lines.
-    return board_eval_default(board, w_);
+    return board_eval_default(state.board, w_);
   }
 
   float tactical_eval(const Placement &move, int lines_cleared, int attack,

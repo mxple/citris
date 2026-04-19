@@ -2,6 +2,7 @@
 #include "ai/board_bitset.h"
 #include "ai/plan_overlay.h"
 #include "controller/ai_controller.h"
+#include "engine/attack.h"
 #include "render/view_model.h"
 
 #include <imgui.h>
@@ -62,6 +63,7 @@ void AIState::start_search(const GameState &state) {
   input.hold = state.hold_piece;
   input.hold_available = state.hold_available;
   input.queue_draws = state.queue_draws;
+  input.attack = state.attack_state; // seed b2b/combo into search root
 
   last_input_ = input; // copy saved before any move
 
@@ -106,6 +108,16 @@ bool AIState::poll_search() {
 }
 
 void AIState::on_piece_locked(const eng::PieceLocked &ev) {
+  // Debug hook: snapshot the move and the pre-move board regardless of
+  // whether the AI is active — we want to evaluate the player's moves too.
+  // `last_board_` holds the most recent snapshot taken in fill_plan_overlay
+  // (last frame's board state = board BEFORE the just-locked piece).
+  last_move_ = ev;
+  parent_board_ = last_board_;
+  parent_b2b_ = tracked_b2b_;
+  tracked_b2b_ = ev.new_b2b;
+  has_last_move_ = true;
+
   if (!active)
     return;
 
@@ -117,6 +129,13 @@ void AIState::on_piece_locked(const eng::PieceLocked &ev) {
     if (match) {
       plan_.advance();
       if (plan_.complete()) {
+        plan_source_ = PlanSource::None;
+        needs_search = true;
+      } else if (plan_commit_limit > 0 &&
+                 plan_.current_step >= plan_commit_limit) {
+        // Hit the commit window. Discard the speculative tail and let
+        // the next search recompute from fresh information. Plan stays
+        // visible in the overlay until the new search lands.
         plan_source_ = PlanSource::None;
         needs_search = true;
       }
@@ -141,6 +160,12 @@ void AIState::on_garbage(int lines) {
 }
 
 void AIState::on_undo() {
+  // Invalidate debug snapshots on undo — the last_move_ we cached no longer
+  // corresponds to the current board state, and tracked_b2b_ may be wrong
+  // relative to the new (undone) state.
+  has_last_move_ = false;
+  tracked_b2b_ = 0;
+
   if (!active)
     return;
   beam_task_.reset();
@@ -156,6 +181,13 @@ void AIState::clear_search_state() {
   plan_ = Plan{};
   plan_source_ = PlanSource::None;
   needs_search = false;
+
+  // Drop debug snapshots too — this path fires on game restart (see
+  // GameManager::restart in game_manager.cc:40). Keeping a stale
+  // tracked_b2b_ across restarts would make the Player Eval panel
+  // fabricate a B2B streak that no longer exists.
+  has_last_move_ = false;
+  tracked_b2b_ = 0;
 }
 
 void AIState::deactivate() {
@@ -184,33 +216,45 @@ void AIState::build_plan_from_beam(const BeamResult &result) {
   auto hold = last_input_.hold;
   BoardBitset sim = last_input_.board;
 
-  // Truncate PV at the known-queue boundary. Deeper PV steps come from
+  // Truncate PV at the known-piece boundary. Available pieces = queue
+  // (current + previews) PLUS the hold slot, so when the queue is drained
+  // we still have one final ply to play whatever is in hold (the search
+  // explores this — see ai.cc:351-353). Deeper PV steps come from
   // draw_from_bag speculation and commit to a specific bag ordering that
   // rarely matches the real game's RNG. Dispatching them makes the engine
   // silently drop the mismatched Place command and stalls autoplay.
   // Followup: replace the flat Plan with a tree branching on piece reveals
   // so speculative work is preserved (see wiki/ai.md §"Plan Dispatch").
   for (const auto &p : result.pv) {
-    if (qi >= (int)queue.size())
+    bool queue_empty = qi >= (int)queue.size();
+    if (queue_empty && !hold.has_value())
       break;
 
     Plan::Step step;
     step.placement = p;
 
-    PieceType current = queue[qi];
-    if (current == p.type) {
-      step.uses_hold = false;
-      ++qi;
-    } else if (hold.has_value() && *hold == p.type) {
-      step.uses_hold = true;
-      hold = current;
-      ++qi;
-    } else {
-      if (qi + 1 >= (int)queue.size())
+    if (queue_empty) {
+      // Final ply: only hold remains. PV step must consume it.
+      if (*hold != p.type)
         break;
       step.uses_hold = true;
-      hold = current;
-      qi += 2;
+      hold = std::nullopt;
+    } else {
+      PieceType current = queue[qi];
+      if (current == p.type) {
+        step.uses_hold = false;
+        ++qi;
+      } else if (hold.has_value() && *hold == p.type) {
+        step.uses_hold = true;
+        hold = current;
+        ++qi;
+      } else {
+        if (qi + 1 >= (int)queue.size())
+          break;
+        step.uses_hold = true;
+        hold = current;
+        qi += 2;
+      }
     }
 
     sim.place(p.type, p.rotation, p.x, p.y);
@@ -235,27 +279,36 @@ void AIState::build_plan_from_pc(const PcResult &result) {
   BoardBitset sim = last_input_.board;
 
   for (const auto &p : result.solution) {
-    if (qi >= (int)queue.size())
+    bool queue_empty = qi >= (int)queue.size();
+    if (queue_empty && !hold.has_value())
       break;
 
     Plan::Step step;
     step.placement = p;
 
-    PieceType current = queue[qi];
-    if (current == p.type) {
-      step.uses_hold = false;
-      ++qi;
-    } else if (hold.has_value() && *hold == p.type) {
-      step.uses_hold = true;
-      hold = current;
-      ++qi;
-    } else {
-      if (qi + 1 >= (int)queue.size())
+    if (queue_empty) {
+      // Final ply: only hold remains. PV step must consume it.
+      if (*hold != p.type)
         break;
-      // Hold was empty — hold current, play next
       step.uses_hold = true;
-      hold = current;
-      qi += 2;
+      hold = std::nullopt;
+    } else {
+      PieceType current = queue[qi];
+      if (current == p.type) {
+        step.uses_hold = false;
+        ++qi;
+      } else if (hold.has_value() && *hold == p.type) {
+        step.uses_hold = true;
+        hold = current;
+        ++qi;
+      } else {
+        if (qi + 1 >= (int)queue.size())
+          break;
+        // Hold was empty — hold current, play next
+        step.uses_hold = true;
+        hold = current;
+        qi += 2;
+      }
     }
 
     sim.place(p.type, p.rotation, p.x, p.y);
@@ -268,6 +321,11 @@ void AIState::build_plan_from_pc(const PcResult &result) {
 }
 
 void AIState::fill_plan_overlay(ViewModel &vm, const GameState &state) const {
+  // Refresh the debug snapshot every frame. Done unconditionally so the
+  // Player Eval panel stays live even when the AI isn't active or no plan
+  // exists. `last_board_` is mutable to allow this from a const method.
+  last_board_ = BoardBitset::from_board(state.board);
+
   if (!plan_computed() || current_plan().complete())
     return;
   auto remaining = std::span(plan_.steps).subspan(plan_.current_step);
@@ -312,6 +370,16 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
       ImGui::SetNextItemWidth(-FLT_MIN);
       if (ImGui::SliderInt("##speed", &speed, 0, 1000))
         ai_ctrl.set_interval_ms(1000 - speed);
+
+      // Commit window: 0 means "play the entire PV" (legacy). Any positive
+      // value forces a re-search after that many plan steps, discarding
+      // the speculative tail of the previous PV.
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted("Commit");
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      ImGui::SliderInt("##commit", &plan_commit_limit, 0, 10);
     }
 
     ImGui::TableNextRow();
@@ -384,5 +452,175 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     ImGui::Text("Plan: %d steps%s", (int)plan_.steps.size(), tag);
   } else {
     ImGui::TextUnformatted("No plan");
+  }
+
+  // --- PV Evaluation breakdown --------------------------------------------
+  // Replays the PV through the current mode's evaluator and prints a
+  // per-step breakdown. Only shown for beam results — PC plans don't
+  // produce a beam-comparable score. Reconstructed SearchState uses
+  // defaults for fields BeamInput doesn't preserve (bag_remaining,
+  // used_counts); the replayed values can drift from the reported score
+  // deep into the PV but the per-step breakdown is what you want for
+  // debugging why the AI chose this line.
+  if (plan_computed() && !plan_.steps.empty() &&
+      plan_source_ == PlanSource::BeamSearch) {
+    ImGui::SeparatorText("PV Evaluation");
+
+    auto eval = make_evaluator();
+
+    SearchState state{};
+    state.board = last_input_.board;
+    state.hold = last_input_.hold;
+    state.hold_available = last_input_.hold_available;
+    state.bag_remaining = 0x7F;
+    state.queue_draws = last_input_.queue_draws;
+    state.attack = last_input_.attack; // real b2b/combo at search root
+
+    float initial_board = eval->board_eval(state);
+    float cum_tact = 0.0f;
+    float last_board = initial_board;
+
+    ImGui::Text("Init board: %+.1f", initial_board);
+
+    if (ImGui::BeginTable("##pv_eval", 6,
+                          ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_SizingFixedFit |
+                              ImGuiTableFlags_RowBg)) {
+      ImGui::TableSetupColumn("#");
+      ImGui::TableSetupColumn("Move");
+      ImGui::TableSetupColumn("Spin/L");
+      ImGui::TableSetupColumn("Tact");
+      ImGui::TableSetupColumn("\xce\xa3Tact"); // "ΣTact"
+      ImGui::TableSetupColumn("Board");
+      ImGui::TableHeadersRow();
+
+      // PieceType enum order: I, O, T, S, Z, J, L
+      static constexpr char kPieceChar[] = "IOTSZJL";
+      // SpinKind enum order: None, Mini, TSpin, AllSpin
+      static const char *kSpinLabel[] = {"-", "mini", "Tspin", "allspin"};
+
+      for (int i = 0; i < static_cast<int>(plan_.steps.size()); ++i) {
+        const auto &step = plan_.steps[i];
+
+        // Advance attack state on a copy so we can feed the attack value
+        // into tactical_eval without mutating `state` until after the call.
+        AttackState after_attack = state.attack;
+        int attack_sent = compute_attack_and_update_state(
+            after_attack, step.lines_cleared, step.placement.spin);
+
+        float tact = eval->tactical_eval(step.placement, step.lines_cleared,
+                                         attack_sent, state);
+        cum_tact += tact;
+
+        // Advance the reconstructed state to post-move
+        state.board = step.board_after;
+        state.attack = after_attack;
+        state.depth = i + 1;
+        state.lines_cleared += step.lines_cleared;
+        state.total_attack += attack_sent;
+        float board = eval->board_eval(state);
+        last_board = board;
+
+        ImGui::TableNextRow();
+        if (i == plan_.current_step)
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(40, 80, 120, 120));
+
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", i);
+        ImGui::TableNextColumn();
+        ImGui::Text("%s%c %d,%d r%d", step.uses_hold ? "*" : "",
+                    kPieceChar[static_cast<int>(step.placement.type)],
+                    step.placement.x, step.placement.y,
+                    static_cast<int>(step.placement.rotation));
+        ImGui::TableNextColumn();
+        ImGui::Text("%s/%d",
+                    kSpinLabel[static_cast<int>(step.placement.spin)],
+                    step.lines_cleared);
+        ImGui::TableNextColumn();
+        ImGui::Text("%+.1f", tact);
+        ImGui::TableNextColumn();
+        ImGui::Text("%+.1f", cum_tact);
+        ImGui::TableNextColumn();
+        ImGui::Text("%+.1f", board);
+      }
+      ImGui::EndTable();
+    }
+
+    // Final composite = what the beam search actually compared against.
+    float composite = eval->composite(last_board, cum_tact,
+                                      static_cast<int>(plan_.steps.size()));
+    ImGui::Text("Composite: %+.1f  (reported: %+.1f)", composite, last_score_);
+  }
+
+  // --- Player Eval: score the current board + last locked move through
+  // the selected evaluator. Works whether the AI is active or not, so the
+  // user can test their own play against whatever eval they've tuned.
+  // Always visible once at least one piece has locked — `parent_board_`
+  // and `last_move_` persist across search invalidations.
+  ImGui::SeparatorText("Player Eval");
+  {
+    auto eval = make_evaluator();
+
+    // --- Board eval of current board ---
+    SearchState cur_state{};
+    cur_state.board = last_board_;
+    cur_state.hold = last_input_.hold;
+    cur_state.hold_available = last_input_.hold_available;
+    cur_state.bag_remaining = 0x7F;
+    cur_state.attack.b2b = tracked_b2b_;
+    float cur_board_score = eval->board_eval(cur_state);
+    ImGui::Text("Current board: %+.2f  (b2b=%d)", cur_board_score,
+                tracked_b2b_);
+
+    // --- Tactical eval of last move ---
+    if (!has_last_move_) {
+      ImGui::TextDisabled("Last move: (none yet)");
+    } else {
+      // PieceType order: I,O,T,S,Z,J,L
+      static constexpr char kPieceChar[] = "IOTSZJL";
+      static const char *kSpinLabel[] = {"-", "mini", "Tspin", "allspin"};
+
+      Placement p{};
+      p.type = last_move_.type;
+      p.rotation = last_move_.rotation;
+      p.x = last_move_.x;
+      p.y = last_move_.y;
+      p.spin = last_move_.spin;
+
+      // Reconstruct parent state: the board + attack state BEFORE the move
+      // landed. b2b and combo come from tracked values; new_b2b is stored
+      // in tracked_b2b_, parent_b2b_ snapshots the prior value.
+      SearchState parent{};
+      parent.board = parent_board_;
+      parent.hold = last_input_.hold;
+      parent.hold_available = last_input_.hold_available;
+      parent.bag_remaining = 0x7F;
+      parent.attack.combo = last_move_.prev_combo;
+      parent.attack.b2b = parent_b2b_;
+
+      float tact = eval->tactical_eval(p, last_move_.lines_cleared,
+                                       last_move_.attack, parent);
+
+      ImGui::Text("Last: %c @ (%d,%d) r%d  %s/%dL  atk=%d",
+                  kPieceChar[static_cast<int>(p.type)], p.x, p.y,
+                  static_cast<int>(p.rotation),
+                  kSpinLabel[static_cast<int>(p.spin)],
+                  last_move_.lines_cleared, last_move_.attack);
+      ImGui::Text("  prev combo=%d, b2b=%d \xe2\x86\x92 new combo=%d, b2b=%d",
+                  last_move_.prev_combo, parent_b2b_, last_move_.new_combo,
+                  last_move_.new_b2b);
+      ImGui::Text("  tactical_eval: %+.2f", tact);
+
+      // For convenience, show what an AI would call the "move score" for
+      // this placement: parent_board_eval + tactical. Lets the user
+      // compare directly against the PV's per-step numbers above.
+      SearchState parent_for_board = parent;
+      float parent_board_score = eval->board_eval(parent_for_board);
+      float after_board_score = cur_board_score;
+      ImGui::Text("  board: %+.2f \xe2\x86\x92 %+.2f  (\xce\x94=%+.2f)",
+                  parent_board_score, after_board_score,
+                  after_board_score - parent_board_score);
+    }
   }
 }
