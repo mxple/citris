@@ -97,7 +97,7 @@ void add_line(Grid &g, int row_idx) {
 // NOTE: the overhang cap is stamped as regular garbage (value 1). Reverse
 // construction will usually uncarve it to satisfy is_few_non_cheese_hole,
 // so the overhang usually isn't visible on the initial board.
-bool generate_final_map(Grid &g, int garbage_below, std::mt19937 &rng) {
+bool generate_final_map_tsd(Grid &g, int garbage_below, std::mt19937 &rng) {
   g = Grid{};
 
   // Random heights 2..4 per column (script7.js:870-872).
@@ -176,6 +176,262 @@ bool generate_final_map(Grid &g, int garbage_below, std::mt19937 &rng) {
   }
 
   return true;
+}
+
+// --- Helpers shared by script6.js mode generators ---------------------
+
+// Stamps a rectangular pattern of 'G'/'N' characters onto g. 'G' → filled
+// (1), 'N' → empty (0). pattern[r] is row r (r=0 is bottommost / lowest y).
+// Placed at (base_col + c, base_row + r).
+void stamp_pattern(Grid &g, int base_row, int base_col,
+                   const char *const *pattern, int rows, int cols) {
+  for (int r = 0; r < rows; ++r)
+    for (int c = 0; c < cols; ++c) {
+      int x = base_col + c, y = base_row + r;
+      if (x < 0 || x >= kBoardW || y < 0 || y >= kBoardH)
+        continue;
+      g.set(x, y, pattern[r][c] == 'G' ? 1 : 0);
+    }
+}
+
+// Fills g to `heights[x]` with garbage (value 1) for every column.
+// Equivalent to the common `if (j < height[i]) game.board[j][i] = 'G'` loop.
+void fill_heights(Grid &g, const std::array<int, kBoardW> &heights) {
+  for (int x = 0; x < kBoardW; ++x)
+    for (int y = 0; y < heights[x] && y < kBoardH; ++y)
+      g.set(x, y, 1);
+}
+
+// Appends `garbage_below` cheese rows at the bottom, each with a hole at
+// col_add. Shared tail of every mode's generate_final_map (see e.g.
+// script6.js:931-934, 1010-1013, 1089-1092).
+void stamp_cheese_tail(Grid &g, int garbage_below, int col_add) {
+  for (int row_idx = 0; row_idx < garbage_below; ++row_idx) {
+    add_line(g, row_idx);
+    if (col_add >= 0 && col_add < kBoardW)
+      g.set(col_add, row_idx, 0);
+  }
+}
+
+// --- Mode-specific final-map generators -------------------------------
+// Each function builds the INITIAL board state for its mode. They share
+// the same contract as generate_final_map_tsd: zero out g, build random
+// heights, stamp the keyhole, add cheese tail, return true on success.
+
+// 1-to-1 port of script6.js:939-1017 (mode='dt').
+// Keyhole: 7-row × 4-col garbage pattern (wall + overhang for TSD + TST).
+// Heights: random 5..7, optionally bumped by +1 globally with -1 at the
+// two keyhole-adjacent columns. Optional kick-column cells at rows 5, 6.
+// Cheese: lines_add ∈ [0,2], col_add ∈ {tsd_col, random(0..9)}.
+//
+// Patterns (row 0 = lowest y):
+//   is_right=true (tsd_col ∈ [2,7], base_col = tsd_col-2):
+//     {"GGNG","GGNG","GNNN","GNNG","GGNG","NNNG","NNGG"}
+//   is_right=false (base_col = tsd_col-1):
+//     {"GNGG","GNGG","NNNG","GNNG","GNGG","GNNN","GGNN"}
+bool generate_final_map_dt(Grid &g, int garbage_below, std::mt19937 &rng) {
+  g = Grid{};
+
+  std::uniform_int_distribution<int> d01(0, 1);
+  std::array<int, kBoardW> heights;
+  std::uniform_int_distribution<int> hdist(5, 7);
+  for (int i = 0; i < kBoardW; ++i)
+    heights[i] = hdist(rng);
+
+  bool is_right = d01(rng) == 0;
+  int tsd_col = std::uniform_int_distribution<int>(2, 7)(rng);
+
+  if (d01(rng) == 0) {
+    for (int i = 0; i < kBoardW; ++i)
+      heights[i] += 1;
+    if (is_right) {
+      heights[tsd_col - 1] -= 1;
+      heights[tsd_col - 2] -= 1;
+    } else {
+      heights[tsd_col + 1] -= 1;
+      heights[tsd_col + 2] -= 1;
+    }
+  }
+
+  fill_heights(g, heights);
+
+  int kick_col;
+  if (is_right) {
+    const char *const pat[7] = {"GGNG", "GGNG", "GNNN", "GNNG",
+                                "GGNG", "NNNG", "NNGG"};
+    stamp_pattern(g, 0, tsd_col - 2, pat, 7, 4);
+    kick_col = tsd_col - 3;
+  } else {
+    const char *const pat[7] = {"GNGG", "GNGG", "NNNG", "GNNG",
+                                "GNGG", "GNNN", "GGNN"};
+    stamp_pattern(g, 0, tsd_col - 1, pat, 7, 4);
+    kick_col = tsd_col + 3;
+  }
+
+  if (kick_col >= 0 && kick_col < kBoardW) {
+    // Reference: if a coin flip AND the cell at y=7 is empty, punch holes
+    // at y=5,6 — else fill them solid. Keeps the kick column either open
+    // or bridged depending on the landscape above.
+    if (d01(rng) == 0 && !g.filled(kick_col, 7)) {
+      g.set(kick_col, 5, 0);
+      g.set(kick_col, 6, 0);
+    } else {
+      g.set(kick_col, 5, 1);
+      g.set(kick_col, 6, 1);
+    }
+  }
+
+  int col_add = (d01(rng) == 1)
+                    ? tsd_col
+                    : std::uniform_int_distribution<int>(0, kBoardW - 1)(rng);
+  stamp_cheese_tail(g, garbage_below, col_add);
+  return true;
+}
+
+// 1-to-1 port of script6.js:1018-1096 (mode='cspin').
+// Keyhole: 6-row × 4-col garbage pattern (C-spin slot).
+// Heights: random 5..7 with unconditional -=1 on tsd_col and one neighbor
+// (creates the C-slot mouth). Kick-column cells at rows 4, 5 (always 'G').
+// Cheese: lines_add ∈ [0,2].
+//
+// Patterns (row 0 = lowest y):
+//   is_right=true  (tsd_col ∈ [1,7], base_col = tsd_col-1):
+//     {"GNGG","GGNG","GNNG","GGNG","NNNG","NNGG"}
+//   is_right=false (tsd_col ∈ [2,8], base_col = tsd_col-2):
+//     {"GGNG","GNGG","GNNG","GNGG","GNNN","GGNN"}
+bool generate_final_map_cspin(Grid &g, int garbage_below, std::mt19937 &rng) {
+  g = Grid{};
+
+  std::uniform_int_distribution<int> d01(0, 1);
+  std::array<int, kBoardW> heights;
+  std::uniform_int_distribution<int> hdist(5, 7);
+  for (int i = 0; i < kBoardW; ++i)
+    heights[i] = hdist(rng);
+
+  bool is_right = d01(rng) == 0;
+  int tsd_col;
+  if (is_right) {
+    tsd_col = std::uniform_int_distribution<int>(1, 7)(rng);
+    if (d01(rng) == 0) {
+      for (int i = 0; i < kBoardW; ++i)
+        heights[i] += 1;
+      heights[tsd_col - 1] -= 1;
+      heights[tsd_col] -= 1;
+    }
+    heights[tsd_col - 1] -= 1;
+    heights[tsd_col] -= 1;
+  } else {
+    tsd_col = std::uniform_int_distribution<int>(2, 8)(rng);
+    if (d01(rng) == 0) {
+      for (int i = 0; i < kBoardW; ++i)
+        heights[i] += 1;
+      heights[tsd_col + 1] -= 1;
+      heights[tsd_col] -= 1;
+    }
+    heights[tsd_col + 1] -= 1;
+    heights[tsd_col] -= 1;
+  }
+
+  fill_heights(g, heights);
+
+  int kick_col;
+  if (is_right) {
+    const char *const pat[6] = {"GNGG", "GGNG", "GNNG",
+                                "GGNG", "NNNG", "NNGG"};
+    stamp_pattern(g, 0, tsd_col - 1, pat, 6, 4);
+    kick_col = tsd_col - 2;
+  } else {
+    const char *const pat[6] = {"GGNG", "GNGG", "GNNG",
+                                "GNGG", "GNNN", "GGNN"};
+    stamp_pattern(g, 0, tsd_col - 2, pat, 6, 4);
+    kick_col = tsd_col + 2;
+  }
+
+  if (kick_col >= 0 && kick_col < kBoardW) {
+    g.set(kick_col, 4, 1);
+    g.set(kick_col, 5, 1);
+  }
+
+  int col_add = (d01(rng) == 1)
+                    ? tsd_col
+                    : std::uniform_int_distribution<int>(0, kBoardW - 1)(rng);
+  stamp_cheese_tail(g, garbage_below, col_add);
+  return true;
+}
+
+// 1-to-1 port of script6.js:892-938 (mode='fractal').
+// Keyhole: two stacked T-slots. Heights 5..6 with tsd_col forced to 0 and
+// shoulder at 3. Carves board[1][tsd_col±1] and board[3][tsd_col±1] to 'N',
+// then stamps a small 'G' patch on the tsd side.
+// Cheese: lines_add ∈ [0,2].
+bool generate_final_map_fractal(Grid &g, int garbage_below,
+                                std::mt19937 &rng) {
+  g = Grid{};
+
+  std::uniform_int_distribution<int> d01(0, 1);
+  std::array<int, kBoardW> heights;
+  std::uniform_int_distribution<int> hdist(5, 6);
+  for (int i = 0; i < kBoardW; ++i)
+    heights[i] = hdist(rng);
+
+  int tsd_col = std::uniform_int_distribution<int>(1, 8)(rng);
+  heights[tsd_col] = 0;
+
+  bool is_left;
+  if (tsd_col == 1)
+    is_left = false;
+  else if (tsd_col == 8)
+    is_left = true;
+  else
+    is_left = d01(rng) == 1;
+
+  int sign_left = is_left ? 1 : -1;
+  heights[tsd_col + sign_left] = 3;
+
+  fill_heights(g, heights);
+
+  // Twin T-slots: carve the two N-cells above and within the mesa.
+  g.set(tsd_col - 1, 3, 0);
+  g.set(tsd_col + 1, 3, 0);
+  g.set(tsd_col - 1, 1, 0);
+  g.set(tsd_col + 1, 1, 0);
+
+  // Fill the keyhole side opposite the shoulder with a 'G' patch so the
+  // upper T-slot has a ceiling (reference script6.js:915-926).
+  if (is_left) {
+    g.set(tsd_col - 1, 4, 1);
+    g.set(tsd_col - 2, 2, 1);
+    g.set(tsd_col - 2, 3, 1);
+    g.set(tsd_col - 2, 4, 1);
+  } else {
+    g.set(tsd_col + 1, 4, 1);
+    g.set(tsd_col + 2, 2, 1);
+    g.set(tsd_col + 2, 3, 1);
+    g.set(tsd_col + 2, 4, 1);
+  }
+
+  int col_add = (d01(rng) == 1)
+                    ? tsd_col
+                    : std::uniform_int_distribution<int>(0, kBoardW - 1)(rng);
+  stamp_cheese_tail(g, garbage_below, col_add);
+  return true;
+}
+
+// Dispatcher — selects the per-mode generator. Keeps `reverse_construct`
+// and the outer retry loop mode-agnostic.
+bool generate_final_map(Grid &g, PuzzleMode mode, int garbage_below,
+                        std::mt19937 &rng) {
+  switch (mode) {
+  case PuzzleMode::TSD:
+    return generate_final_map_tsd(g, garbage_below, rng);
+  case PuzzleMode::DTCannon:
+    return generate_final_map_dt(g, garbage_below, rng);
+  case PuzzleMode::Cspin:
+    return generate_final_map_cspin(g, garbage_below, rng);
+  case PuzzleMode::Fractal:
+    return generate_final_map_fractal(g, garbage_below, rng);
+  }
+  return false;
 }
 
 // --- Reverse construction ---------------------------------------------
@@ -547,7 +803,7 @@ std::optional<PuzzleResult> generate_puzzle(const PuzzleRequest &req,
     // on `i % 2 == 1`, script7.js:995-1001). First iteration always builds.
     bool should_regen = !map_valid || (attempt % 2 == 1);
     if (should_regen) {
-      if (!generate_final_map(g, local.garbage_below, rng))
+      if (!generate_final_map(g, local.mode, local.garbage_below, rng))
         return std::nullopt;
       map_valid = true;
     }

@@ -20,12 +20,67 @@
 #include <string>
 #include <vector>
 
-// TSpin-practice preset built on the 1-to-1 port of script7.js's TSD
-// challenge puzzle generator. Supports two variants:
-//   - TSD:     downstack cleanly + score one T-Spin Double. Reserved: {T}.
-//   - TSDQuad: same, but the player must ALSO score a Tetris (quad line
-//              clear) with the reserved I. Reserved: {T, I}. 4 cheese rows.
-enum class TSpinVariant { TSD, TSDQuad };
+// TSpin-practice preset built on the downstack-practice puzzle generator.
+// Supports five variants (see script6.js + script7.js), all sharing the
+// same reverse-construction pipeline — only the keyhole, reserved pieces,
+// cheese-row count, and win criteria differ.
+//
+//   - TSD:      1 TSD. Reserved {T}.           (script7.js)
+//   - TSDQuad:  1 TSD + 1 Tetris. Reserved {T, I}. Fixed 4 cheese rows.
+//   - DTCannon: 1 TSD + 1 TST. Reserved {T, T}.  (script6.js mode='dt')
+//   - Cspin:    1 TSD + 1 TST. Reserved {T, T}.  (script6.js mode='cspin')
+//   - Fractal:  2 TSDs.        Reserved {T, T}.  (script6.js mode='fractal')
+enum class TSpinVariant { TSD, TSDQuad, DTCannon, Cspin, Fractal };
+
+// Declarative per-variant spec. Replaces the previous hard-coded
+// `if (variant == TSDQuad)` branches so adding a new variant is a
+// single table entry. TODO: populate with the four non-TSD rows.
+struct TSpinVariantSpec {
+  const char *title;
+  PuzzleMode puzzle_mode;
+  std::vector<PieceType> reserved;
+  int required_tsds;   // min T-Spin Doubles to win
+  int required_tsts;   // min T-Spin Triples to win
+  int required_quads;  // min Tetrises (quad line clears) to win
+  int garbage_below_min; // cheese rows, inclusive min
+  int garbage_below_max; // inclusive max; use min==max for fixed count
+  // Non-cheese hole budget during reverse construction. TSD uses 0
+  // (strict) so the overhang is forced to uncarve, hiding the setup.
+  // DT/Cspin/Fractal keyholes have too many stamped N-cells to satisfy a
+  // strict budget, so they use a permissive cap (matches the reference's
+  // `mdhole_ind = true` relaxation, see script6.js:1307-1308).
+  int max_non_cheese_holes;
+  // Whether the win check requires a no-floating-cells board. TSD demands
+  // clean downstack (script7.js:detect_win calls all_grounded). DT/Cspin
+  // etc. score on spins only (script6.js:1385-1410 has no grounding check)
+  // — a TST inherently leaves an overhang, so requiring it is impossible.
+  bool require_no_float;
+  // Default skim policy for the "Normal" difficulty tier. TSD randomizes
+  // (script7.js:1048 `skim_ind = Math.random()>0.5`); script6.js modes
+  // default to false (script6.js:6 `'skim_ind':false`).
+  bool allow_skims_default;
+};
+
+inline TSpinVariantSpec variant_spec(TSpinVariant v) {
+  switch (v) {
+  case TSpinVariant::TSD:
+    return {"TSD Practice", PuzzleMode::TSD,
+            {PieceType::T}, 1, 0, 0, 0, 2, 0, true, true};
+  case TSpinVariant::TSDQuad:
+    return {"TSD + Quad Practice", PuzzleMode::TSD,
+            {PieceType::T, PieceType::I}, 1, 0, 1, 4, 4, 0, true, true};
+  case TSpinVariant::DTCannon:
+    return {"DT Cannon Practice", PuzzleMode::DTCannon,
+            {PieceType::T, PieceType::T}, 1, 1, 0, 0, 2, 99, false, false};
+  case TSpinVariant::Cspin:
+    return {"C-Spin Practice", PuzzleMode::Cspin,
+            {PieceType::T, PieceType::T}, 1, 1, 0, 0, 2, 99, false, false};
+  case TSpinVariant::Fractal:
+    return {"Fractal Practice", PuzzleMode::Fractal,
+            {PieceType::T, PieceType::T}, 2, 0, 0, 0, 2, 99, false, false};
+  }
+  return {};
+}
 
 class TSpinPracticeMode : public GameMode {
 public:
@@ -36,10 +91,7 @@ public:
         [this](std::mt19937 &rng) { return generate(rng); });
   }
 
-  std::string title() const override {
-    return variant_ == TSpinVariant::TSDQuad ? "TSD + Quad Practice"
-                                             : "TSD Practice";
-  }
+  std::string title() const override { return variant_spec(variant_).title; }
 
   bool undo_allowed() const override { return true; }
   bool infinite_hold() const override { return true; }
@@ -57,6 +109,7 @@ public:
     GameMode::on_start(now);
     pieces_placed_ = 0;
     tsds_ = 0;
+    tsts_ = 0;
     quads_ = 0;
   }
 
@@ -75,6 +128,7 @@ public:
     board = current_.board;
     pieces_placed_ = 0;
     tsds_ = 0;
+    tsts_ = 0;
     quads_ = 0;
     no_float_ok_ = true; // empty residual stack trivially satisfies
     last_was_win_ = false;
@@ -86,6 +140,8 @@ public:
     pieces_placed_++;
     if (ev.spin == SpinKind::TSpin && ev.lines_cleared == 2)
       tsds_++;
+    if (ev.spin == SpinKind::TSpin && ev.lines_cleared == 3)
+      tsts_++;
     if (ev.lines_cleared == 4)
       quads_++;
     // Cache the floating-cells check so draw_sidebar (which has no GameState
@@ -94,12 +150,16 @@ public:
 
     int total = num_pieces_.load() + reserved_count();
     if (pieces_placed_ >= total) {
-      // Win conditions mirror script7.js:detect_win:
-      //   TSD:     >=1 T-Spin Double scored AND final stack has no floats.
-      //   TSDQuad: TSD AND >=1 Tetris AND no floats.
-      bool goals_met = (tsds_ >= 1) &&
-                       (variant_ != TSpinVariant::TSDQuad || quads_ >= 1);
-      bool won = goals_met && no_floating_cells(state.board);
+      // Win conditions are data-driven from variant_spec. Mirrors
+      // script7.js:detect_win (TSD/TSDQuad — checks all_grounded) and
+      // script6.js:1385-1410 (DT/Cspin/Fractal — score only; a TST leaves
+      // an overhang, so no-floating would be impossible).
+      auto s = variant_spec(variant_);
+      bool goals_met = tsds_ >= s.required_tsds &&
+                       tsts_ >= s.required_tsts &&
+                       quads_ >= s.required_quads;
+      bool won = goals_met &&
+                 (!s.require_no_float || no_floating_cells(state.board));
       last_was_win_ = won;
       attempts_++;
       if (won)
@@ -176,10 +236,28 @@ public:
     // progress markers so the player can verify what's scored and what's
     // still needed before the queue runs out.
     ImGui::TextUnformatted("Goals:");
-    draw_goal("T-Spin Double", tsds_ >= 1);
-    if (variant_ == TSpinVariant::TSDQuad)
-      draw_goal("Tetris (Quad)", quads_ >= 1);
-    draw_goal("No floating cells", no_float_ok_);
+    auto s = variant_spec(variant_);
+    char lbl[32];
+    if (s.required_tsds > 0) {
+      if (s.required_tsds == 1)
+        draw_goal("T-Spin Double", tsds_ >= 1);
+      else {
+        std::snprintf(lbl, sizeof(lbl), "%dx T-Spin Double", s.required_tsds);
+        draw_goal(lbl, tsds_ >= s.required_tsds);
+      }
+    }
+    if (s.required_tsts > 0) {
+      if (s.required_tsts == 1)
+        draw_goal("T-Spin Triple", tsts_ >= 1);
+      else {
+        std::snprintf(lbl, sizeof(lbl), "%dx T-Spin Triple", s.required_tsts);
+        draw_goal(lbl, tsts_ >= s.required_tsts);
+      }
+    }
+    if (s.required_quads > 0)
+      draw_goal("Tetris (Quad)", quads_ >= s.required_quads);
+    if (s.require_no_float)
+      draw_goal("No floating cells", no_float_ok_);
 
     ImGui::Separator();
     ImGui::Text("Bank: %zu / %d", bank_->pool_size(), bank_->target_size());
@@ -191,6 +269,20 @@ public:
     if (ImGui::IsItemDeactivatedAfterEdit() &&
         slider_pieces_ != num_pieces_.load()) {
       num_pieces_.store(slider_pieces_);
+      bank_->clear_pool();
+      request_fresh_puzzle();
+    }
+
+    // Difficulty slider — controls allow_skims + cheese-row range.
+    //   Easy  : no skims, min cheese
+    //   Normal: variant-default skims, full cheese range
+    //   Hard  : skims on, max cheese
+    static const char *const kDiffLabels[] = {"Easy", "Normal", "Hard"};
+    ImGui::SliderInt("Difficulty", &slider_difficulty_, 0, 2,
+                     kDiffLabels[slider_difficulty_]);
+    if (ImGui::IsItemDeactivatedAfterEdit() &&
+        slider_difficulty_ != difficulty_.load()) {
+      difficulty_.store(slider_difficulty_);
       bank_->clear_pool();
       request_fresh_puzzle();
     }
@@ -222,21 +314,24 @@ private:
 
 
   std::optional<GeneratedSetup> generate(std::mt19937 &rng) {
+    auto s = variant_spec(variant_);
+    int d = difficulty_.load(); // 0=Easy, 1=Normal, 2=Hard
     PuzzleRequest req;
+    req.mode = s.puzzle_mode;
     req.num_pieces = num_pieces_.load();
-    req.allow_skims = true;
+    // Easy: always no skims + min cheese. Normal: variant default skims +
+    // full cheese range. Hard: force skims on + max cheese.
+    req.allow_skims = (d == 0) ? false
+                     : (d == 2) ? true
+                                : s.allow_skims_default;
     req.smooth_surface = true;
     req.unique_pieces = 1;
-    req.max_non_cheese_holes = 0;
-    // TSD: 0..2 cheese lines (matches script7.js:902 `random(0..2)`).
-    // TSDQuad: fixed 4 lines — the reserved I clears them as a Tetris.
-    if (variant_ == TSpinVariant::TSDQuad) {
-      req.garbage_below = 4;
-      req.reserved = {PieceType::T, PieceType::I};
-    } else {
-      req.garbage_below = std::uniform_int_distribution<int>(0, 2)(rng);
-      req.reserved = {PieceType::T};
-    }
+    req.max_non_cheese_holes = s.max_non_cheese_holes;
+    req.reserved = s.reserved;
+    int cheese_lo = (d == 2) ? s.garbage_below_max : s.garbage_below_min;
+    int cheese_hi = (d == 0) ? s.garbage_below_min : s.garbage_below_max;
+    req.garbage_below =
+        std::uniform_int_distribution<int>(cheese_lo, cheese_hi)(rng);
     auto p = generate_puzzle(req, rng);
     if (!p)
       return std::nullopt;
@@ -245,7 +340,7 @@ private:
   }
 
   int reserved_count() const {
-    return variant_ == TSpinVariant::TSDQuad ? 2 : 1;
+    return static_cast<int>(variant_spec(variant_).reserved.size());
   }
 
   // Row in the goals list: checkmark or bullet + label, colored by state.
@@ -274,6 +369,8 @@ private:
   std::atomic<int> num_pieces_;
   // Staging value for the slider — only pushed to num_pieces_ on release.
   int slider_pieces_;
+  std::atomic<int> difficulty_{1};  // 0=Easy, 1=Normal, 2=Hard
+  int slider_difficulty_ = 1;
   TSpinVariant variant_;
   bool show_hints_ = false;
   std::unique_ptr<PuzzleBank> bank_;
@@ -283,6 +380,7 @@ private:
   bool pending_restart_ = false;
   int pieces_placed_ = 0;
   int tsds_ = 0;
+  int tsts_ = 0;
   int quads_ = 0;
   bool no_float_ok_ = true;
   int solves_ = 0;
