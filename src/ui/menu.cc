@@ -12,23 +12,13 @@
 
 Menu::Menu(SDL_Renderer *renderer, SDL_Window *window, Settings &settings)
     : renderer_(renderer), window_(window), settings_(settings) {
-  modes_ = all_modes();
+  modes_ = all_modes(settings);
 }
 
 std::unique_ptr<GameMode> Menu::make_selected_mode(int index) {
-  auto fresh_modes = all_modes();
+  auto fresh_modes = all_modes(settings_);
   if (index < 0 || index >= static_cast<int>(fresh_modes.size()))
     return nullptr;
-  if (index == 0) {
-    if (auto *fp = dynamic_cast<FreeplayMode *>(fresh_modes[0].get())) {
-      fp->set_gravity_interval(settings_.game.gravity_interval);
-      fp->set_lock_delay(settings_.game.lock_delay);
-      fp->set_garbage_delay(settings_.game.garbage_delay);
-      fp->set_hard_drop_delay(settings_.game.hard_drop_delay);
-      fp->set_max_lock_resets(settings_.game.max_lock_resets);
-      fp->set_infinite_hold(settings_.game.infinite_hold);
-    }
-  }
   return std::move(fresh_modes[index]);
 }
 

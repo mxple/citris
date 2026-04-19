@@ -13,7 +13,6 @@ struct GameTuning {
   std::chrono::milliseconds gravity_interval{10000};
   std::chrono::milliseconds lock_delay{5000};
   std::chrono::milliseconds garbage_delay{250};
-  std::chrono::milliseconds hard_drop_delay{50};
   int max_lock_resets = 15;
   bool infinite_hold = false;
 };
@@ -48,6 +47,7 @@ struct Settings {
   std::chrono::milliseconds das{110};
   std::chrono::milliseconds arr{0};
   std::chrono::milliseconds soft_drop_interval{0};
+  std::chrono::milliseconds hard_drop_delay{50};
   bool das_preserve_charge = true;
 
   // Game tuning (from [game] INI section, applied to freeplay)

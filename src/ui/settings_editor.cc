@@ -50,8 +50,7 @@ void SettingsEditor::sync_from_settings() {
   lock_delay_infinite_ = settings_.game.lock_delay.count() < 0;
   lock_delay_ms_ = lock_delay_infinite_ ? 500 : static_cast<int>(settings_.game.lock_delay.count());
   garbage_delay_ms_ = static_cast<int>(settings_.game.garbage_delay.count());
-  hard_drop_delay_ms_ =
-      static_cast<int>(settings_.game.hard_drop_delay.count());
+  hard_drop_delay_ms_ = static_cast<int>(settings_.hard_drop_delay.count());
   ghost_opacity_pct_ = settings_.ghost_opacity * 100 / 255;
   plan_opacity_pct_ = settings_.plan_opacity * 100 / 255;
   grid_opacity_pct_ = settings_.grid_opacity * 100 / 255;
@@ -229,6 +228,7 @@ void SettingsEditor::draw() {
   int_row("DAS (ms)", &das_ms_);
   int_row("ARR (ms)", &arr_ms_);
   int_row("Soft Drop Interval (ms)", &soft_drop_ms_);
+  int_row("Hard Drop Delay (ms)", &hard_drop_delay_ms_);
   bool_row("DAS Preserve Charge", &settings_.das_preserve_charge);
 
   ImGui::SeparatorText("Rendering");
@@ -290,7 +290,6 @@ void SettingsEditor::draw() {
   optional_ms_row("Gravity Interval (ms)", &gravity_infinite_, &gravity_ms_);
   optional_ms_row("Lock Delay (ms)", &lock_delay_infinite_, &lock_delay_ms_);
   int_row("Garbage Delay (ms)", &garbage_delay_ms_);
-  int_row("Hard Drop Delay (ms)", &hard_drop_delay_ms_);
   int_row("Max Lock Resets", &settings_.game.max_lock_resets);
   bool_row("Infinite Hold", &settings_.game.infinite_hold);
 
@@ -319,7 +318,7 @@ void SettingsEditor::save_settings() {
       lock_delay_infinite_ ? -1 : std::max(0, lock_delay_ms_));
   settings_.game.garbage_delay =
       std::chrono::milliseconds(std::max(0, garbage_delay_ms_));
-  settings_.game.hard_drop_delay =
+  settings_.hard_drop_delay =
       std::chrono::milliseconds(std::max(0, hard_drop_delay_ms_));
   settings_.ghost_opacity =
       static_cast<uint8_t>(std::clamp(ghost_opacity_pct_, 0, 100) * 255 / 100);

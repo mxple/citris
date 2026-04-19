@@ -97,6 +97,13 @@ public:
   bool infinite_hold() const override { return true; }
   bool auto_restart() const override { return true; }
   bool has_sidebar() const override { return true; }
+  std::chrono::milliseconds gravity_interval() const override {
+    return std::chrono::milliseconds{-1};
+  }
+  std::chrono::milliseconds lock_delay() const override {
+    return std::chrono::milliseconds{-1};
+  }
+  int max_lock_resets() const override { return -1; }
 
   PieceQueue create_queue(unsigned /*seed*/) const override {
     // Puzzle pieces are pre-loaded into the buffer (already hold-shuffled

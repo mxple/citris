@@ -292,6 +292,8 @@ bool Settings::load(const std::string &path) {
         ok = parse_ms(val, arr);
       else if (key == "soft_drop_interval")
         ok = parse_ms(val, soft_drop_interval);
+      else if (key == "hard_drop_delay")
+        ok = parse_ms(val, hard_drop_delay);
       else if (key == "das_preserve_charge")
         ok = parse_bool(val, das_preserve_charge);
       else
@@ -307,8 +309,6 @@ bool Settings::load(const std::string &path) {
         ok = parse_int(val, game.max_lock_resets);
       else if (key == "infinite_hold")
         ok = parse_bool(val, game.infinite_hold);
-      else if (key == "hard_drop_delay")
-        ok = parse_ms(val, game.hard_drop_delay);
       else
         ok = false;
     } else {
@@ -368,6 +368,7 @@ bool Settings::save(const std::string &path) const {
   file << "das = " << das.count() << "\n";
   file << "arr = " << arr.count() << "\n";
   file << "soft_drop_interval = " << soft_drop_interval.count() << "\n";
+  file << "hard_drop_delay = " << hard_drop_delay.count() << "\n";
   file << "das_preserve_charge = " << (das_preserve_charge ? "true" : "false")
        << "\n";
   file << "\n";
@@ -379,7 +380,6 @@ bool Settings::save(const std::string &path) const {
   file << "max_lock_resets = " << game.max_lock_resets << "\n";
   file << "infinite_hold = " << (game.infinite_hold ? "true" : "false")
        << "\n";
-  file << "hard_drop_delay = " << game.hard_drop_delay.count() << "\n";
 
   if (!file.good())
     return false;

@@ -3,14 +3,15 @@
 #include "blitz.h"
 #include "cheese.h"
 #include "freeplay.h"
+#include "settings.h"
 #include "sprint.h"
 #include "tspin_practice.h"
 #include <memory>
 #include <vector>
 
-inline std::vector<std::unique_ptr<GameMode>> all_modes() {
+inline std::vector<std::unique_ptr<GameMode>> all_modes(const Settings& settings) {
   std::vector<std::unique_ptr<GameMode>> modes;
-  modes.push_back(std::make_unique<FreeplayMode>());
+  modes.push_back(std::make_unique<FreeplayMode>(settings));
   modes.push_back(std::make_unique<SprintMode>());
   modes.push_back(std::make_unique<BlitzMode>());
   modes.push_back(std::make_unique<CheeseMode>());

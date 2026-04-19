@@ -223,8 +223,8 @@ void PlayerController::reset_input_state() {
 }
 
 void PlayerController::notify(const EngineEvent &ev, TimePoint now) {
-  if (auto *lde = std::get_if<eng::LockDelayExpired>(&ev)) {
-    hard_drop_blocked_until_ = now + lde->hard_drop_delay;
+  if (std::holds_alternative<eng::LockDelayExpired>(ev)) {
+    hard_drop_blocked_until_ = now + settings_.hard_drop_delay;
   }
 }
 

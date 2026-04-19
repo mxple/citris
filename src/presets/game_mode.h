@@ -29,9 +29,6 @@ public:
   virtual std::chrono::milliseconds garbage_delay() const {
     return std::chrono::milliseconds{250};
   }
-  virtual std::chrono::milliseconds hard_drop_delay() const {
-    return std::chrono::milliseconds{50};
-  }
   virtual int max_lock_resets() const { return 15; }
   virtual bool infinite_hold() const { return false; }
   virtual bool hold_allowed() const { return true; }

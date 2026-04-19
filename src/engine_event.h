@@ -3,7 +3,6 @@
 #include "engine/attack.h"
 #include "engine/piece.h"
 #include "notification.h"
-#include <chrono>
 #include <optional>
 #include <variant>
 
@@ -34,9 +33,7 @@ struct GarbageMaterialized {
   int lines;
 };
 struct UndoPerformed {};
-struct LockDelayExpired {
-  std::chrono::milliseconds hard_drop_delay;
-};
+struct LockDelayExpired {};
 } // namespace eng
 
 using EngineEvent =

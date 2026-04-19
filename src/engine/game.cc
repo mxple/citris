@@ -276,7 +276,7 @@ void Game::handle_gravity(TimePoint expired_at) {
 
 void Game::handle_lock_delay_expired() {
   lock_piece();
-  pending_events_.push_back(eng::LockDelayExpired{mode_.hard_drop_delay()});
+  pending_events_.push_back(eng::LockDelayExpired{});
   dirty_ = true;
 }
 
@@ -471,7 +471,7 @@ void Game::post_move_timers() {
     if (lock_resets_remaining_ > 0) {
       --lock_resets_remaining_;
       arm_lock_delay();
-    } else {
+    } else if (lock_resets_remaining_ == 0) {
       lock_piece();
     }
     gravity_deadline_.reset();
