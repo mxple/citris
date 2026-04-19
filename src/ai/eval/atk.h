@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-// Evaluator for T-spin double chains (20TSD mode).
+// Evaluator for general attack.
 //
 // Decision-making improvements over the original geometric eval:
 //

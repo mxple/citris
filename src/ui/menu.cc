@@ -12,11 +12,19 @@
 
 Menu::Menu(SDL_Renderer *renderer, SDL_Window *window, Settings &settings)
     : renderer_(renderer), window_(window), settings_(settings) {
-  modes_ = all_modes(settings);
+  modes_ = play_modes(settings);
+  training_modes_ = training_modes(settings);
 }
 
-std::unique_ptr<GameMode> Menu::make_selected_mode(int index) {
-  auto fresh_modes = all_modes(settings_);
+std::unique_ptr<GameMode> Menu::make_selected_play_mode(int index) {
+  auto fresh_modes = play_modes(settings_);
+  if (index < 0 || index >= static_cast<int>(fresh_modes.size()))
+    return nullptr;
+  return std::move(fresh_modes[index]);
+}
+
+std::unique_ptr<GameMode> Menu::make_selected_training_mode(int index) {
+  auto fresh_modes = training_modes(settings_);
   if (index < 0 || index >= static_cast<int>(fresh_modes.size()))
     return nullptr;
   return std::move(fresh_modes[index]);
@@ -75,6 +83,8 @@ std::unique_ptr<GameMode> Menu::run() {
     if (screen_ == Screen::Main) {
       if (button("Play"))
         screen_ = Screen::PresetSelect;
+      if (button("Training"))
+        screen_ = Screen::TrainModeSelect;
       if (button("Settings"))
         screen_ = Screen::Settings;
       if (button("Quit")) {
@@ -85,7 +95,16 @@ std::unique_ptr<GameMode> Menu::run() {
     } else if (screen_ == Screen::PresetSelect) {
       for (int i = 0; i < (int)modes_.size(); ++i) {
         if (button(modes_[i]->title().c_str())) {
-          selected = make_selected_mode(i);
+          selected = make_selected_play_mode(i);
+        }
+      }
+      ImGui::Spacing();
+      if (button("Back"))
+        back_to_main = true;
+    } else if (screen_ == Screen::TrainModeSelect) {
+      for (int i = 0; i < (int)training_modes_.size(); ++i) {
+        if (button(training_modes_[i]->title().c_str())) {
+          selected = make_selected_training_mode(i);
         }
       }
       ImGui::Spacing();

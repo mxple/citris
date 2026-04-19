@@ -4,9 +4,9 @@
 #include "ai/plan.h"
 #include "ai/plan_overlay.h"
 #include "ai/puzzle_gen.h"
+#include "engine/board.h"
 #include "engine/piece_queue.h"
 #include "engine/piece_source.h"
-#include "engine/board.h"
 #include "game_mode.h"
 #include "puzzle_bank.h"
 #include <algorithm>
@@ -39,9 +39,9 @@ struct TSpinVariantSpec {
   const char *title;
   PuzzleMode puzzle_mode;
   std::vector<PieceType> reserved;
-  int required_tsds;   // min T-Spin Doubles to win
-  int required_tsts;   // min T-Spin Triples to win
-  int required_quads;  // min Tetrises (quad line clears) to win
+  int required_tsds;     // min T-Spin Doubles to win
+  int required_tsts;     // min T-Spin Triples to win
+  int required_quads;    // min Tetrises (quad line clears) to win
   int garbage_below_min; // cheese rows, inclusive min
   int garbage_below_max; // inclusive max; use min==max for fixed count
   // Non-cheese hole budget during reverse construction. TSD uses 0
@@ -64,20 +64,65 @@ struct TSpinVariantSpec {
 inline TSpinVariantSpec variant_spec(TSpinVariant v) {
   switch (v) {
   case TSpinVariant::TSD:
-    return {"TSD Practice", PuzzleMode::TSD,
-            {PieceType::T}, 1, 0, 0, 0, 2, 0, true, true};
+    return {"TSD Practice",
+            PuzzleMode::TSD,
+            {PieceType::T},
+            1,
+            0,
+            0,
+            0,
+            2,
+            0,
+            true,
+            true};
   case TSpinVariant::TSDQuad:
-    return {"TSD + Quad Practice", PuzzleMode::TSD,
-            {PieceType::T, PieceType::I}, 1, 0, 1, 4, 4, 0, true, true};
+    return {"TSD + Quad Practice",
+            PuzzleMode::TSD,
+            {PieceType::T, PieceType::I},
+            1,
+            0,
+            1,
+            4,
+            4,
+            0,
+            true,
+            true};
   case TSpinVariant::DTCannon:
-    return {"DT Cannon Practice", PuzzleMode::DTCannon,
-            {PieceType::T, PieceType::T}, 1, 1, 0, 0, 2, 99, false, false};
+    return {"DT Cannon Practice",
+            PuzzleMode::DTCannon,
+            {PieceType::T, PieceType::T},
+            1,
+            1,
+            0,
+            0,
+            2,
+            99,
+            false,
+            false};
   case TSpinVariant::Cspin:
-    return {"C-Spin Practice", PuzzleMode::Cspin,
-            {PieceType::T, PieceType::T}, 1, 1, 0, 0, 2, 99, false, false};
+    return {"C-Spin Practice",
+            PuzzleMode::Cspin,
+            {PieceType::T, PieceType::T},
+            1,
+            1,
+            0,
+            0,
+            2,
+            99,
+            false,
+            false};
   case TSpinVariant::Fractal:
-    return {"Fractal Practice", PuzzleMode::Fractal,
-            {PieceType::T, PieceType::T}, 2, 0, 0, 0, 2, 99, false, false};
+    return {"Fractal Practice",
+            PuzzleMode::Fractal,
+            {PieceType::T, PieceType::T},
+            2,
+            0,
+            0,
+            0,
+            2,
+            99,
+            false,
+            false};
   }
   return {};
 }
@@ -162,11 +207,10 @@ public:
       // script6.js:1385-1410 (DT/Cspin/Fractal — score only; a TST leaves
       // an overhang, so no-floating would be impossible).
       auto s = variant_spec(variant_);
-      bool goals_met = tsds_ >= s.required_tsds &&
-                       tsts_ >= s.required_tsts &&
+      bool goals_met = tsds_ >= s.required_tsds && tsts_ >= s.required_tsts &&
                        quads_ >= s.required_quads;
-      bool won = goals_met &&
-                 (!s.require_no_float || no_floating_cells(state.board));
+      bool won =
+          goals_met && (!s.require_no_float || no_floating_cells(state.board));
       last_was_win_ = won;
       attempts_++;
       if (won)
@@ -181,8 +225,8 @@ public:
     // so a naive decrement under-counts when a hold-self is undone.
     int total = num_pieces_.load() + reserved_count();
     int in_system = 1 // current piece
-                    + (state.hold_piece.has_value() ? 1 : 0)
-                    + static_cast<int>(state.queue.size());
+                    + (state.hold_piece.has_value() ? 1 : 0) +
+                    static_cast<int>(state.queue.size());
     pieces_placed_ = std::max(0, total - in_system);
     no_float_ok_ = no_floating_cells(state.board);
   }
@@ -195,8 +239,8 @@ public:
     if (pieces_placed_ >= static_cast<int>(current_.solution.size()))
       return;
 
-    auto remaining = std::span<const Placement>(current_.solution)
-                         .subspan(pieces_placed_);
+    auto remaining =
+        std::span<const Placement>(current_.solution).subspan(pieces_placed_);
 
     // Wrap placements as Plan::Step so we can reuse build_plan_overlay's
     // line-clear-aware row_map logic. We only populate `placement`;
@@ -226,8 +270,8 @@ public:
 
     if (state.game_over) {
       hud.game_over_label = state.won ? "CLEAR!" : "FAILED";
-      hud.game_over_label_color = state.won ? Color(100, 255, 100)
-                                            : Color(255, 100, 100);
+      hud.game_over_label_color =
+          state.won ? Color(100, 255, 100) : Color(255, 100, 100);
       char det[64];
       std::snprintf(det, sizeof(det), "%d / %d", solves_, attempts_);
       hud.game_over_detail = det;
@@ -236,7 +280,8 @@ public:
   }
 
   void draw_sidebar() override {
-    if (!ImGui::CollapsingHeader(title().c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+    if (!ImGui::CollapsingHeader(title().c_str(),
+                                 ImGuiTreeNodeFlags_DefaultOpen))
       return;
 
     // Goal list — shows the active variant's win criteria with live
@@ -294,8 +339,9 @@ public:
       request_fresh_puzzle();
     }
 
-    float btn_w = (ImGui::GetContentRegionAvail().x -
-                   ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+    float btn_w =
+        (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) *
+        0.5f;
     if (ImGui::Button("Reset bank", ImVec2(btn_w, 0)))
       bank_->clear_pool();
     ImGui::SameLine();
@@ -319,7 +365,6 @@ private:
     pending_restart_ = true;
   }
 
-
   std::optional<GeneratedSetup> generate(std::mt19937 &rng) {
     auto s = variant_spec(variant_);
     int d = difficulty_.load(); // 0=Easy, 1=Normal, 2=Hard
@@ -328,9 +373,9 @@ private:
     req.num_pieces = num_pieces_.load();
     // Easy: always no skims + min cheese. Normal: variant default skims +
     // full cheese range. Hard: force skims on + max cheese.
-    req.allow_skims = (d == 0) ? false
-                     : (d == 2) ? true
-                                : s.allow_skims_default;
+    req.allow_skims = (d == 0)   ? false
+                      : (d == 2) ? true
+                                 : s.allow_skims_default;
     req.smooth_surface = true;
     req.unique_pieces = 1;
     req.max_non_cheese_holes = s.max_non_cheese_holes;
@@ -352,8 +397,8 @@ private:
 
   // Row in the goals list: checkmark or bullet + label, colored by state.
   static void draw_goal(const char *label, bool done) {
-    ImVec4 color = done ? ImVec4(0.45f, 0.9f, 0.45f, 1.f)
-                        : ImVec4(0.7f, 0.7f, 0.7f, 1.f);
+    ImVec4 color =
+        done ? ImVec4(0.45f, 0.9f, 0.45f, 1.f) : ImVec4(0.7f, 0.7f, 0.7f, 1.f);
     ImGui::TextColored(color, "%s %s", done ? "[x]" : "[ ]", label);
   }
 
@@ -376,7 +421,7 @@ private:
   std::atomic<int> num_pieces_;
   // Staging value for the slider — only pushed to num_pieces_ on release.
   int slider_pieces_;
-  std::atomic<int> difficulty_{1};  // 0=Easy, 1=Normal, 2=Hard
+  std::atomic<int> difficulty_{1}; // 0=Easy, 1=Normal, 2=Hard
   int slider_difficulty_ = 1;
   TSpinVariant variant_;
   bool show_hints_ = false;

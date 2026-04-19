@@ -1,3 +1,18 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Attribution: https://github.com/himitsuconfidential/downstack-practice
+ */
 #pragma once
 
 #include "ai/placement.h"
@@ -7,8 +22,7 @@
 #include <random>
 #include <vector>
 
-// Reverse-construction puzzle generator — ported from the `downstack-practice`
-// reference.
+// Reverse-construction puzzle generator — ported from `downstack-practice`
 //
 // Workflow (identical across modes):
 //   1. Generate the final map: random garbage mesa with a mode-specific
@@ -22,10 +36,6 @@
 //
 // The mode only determines step 1's keyhole shape + cheese budget. Steps 2-3
 // and all predicates (smoothness, stability, hole count) are shared.
-//
-// References:
-//   TSD:              script7.js (1-to-1 port, currently implemented)
-//   DTCannon/Cspin/Fractal: script6.js (ports in progress)
 
 enum class PuzzleMode {
   TSD,       // script7.js — TSD keyhole (wall + overhang + slot + shoulder)

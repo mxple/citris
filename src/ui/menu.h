@@ -17,7 +17,8 @@ public:
 private:
   enum class Screen { Main, PresetSelect, Settings, TrainModeSelect };
 
-  std::unique_ptr<GameMode> make_selected_mode(int index);
+  std::unique_ptr<GameMode> make_selected_play_mode(int index);
+  std::unique_ptr<GameMode> make_selected_training_mode(int index);
 
   SDL_Renderer *renderer_;
   SDL_Window *window_;

@@ -1,3 +1,18 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Attribution: https://github.com/himitsuconfidential/downstack-practice
+ */
 #include "puzzle_gen.h"
 #include "ai/board_bitset.h"
 #include "ai/movegen.h"
@@ -7,16 +22,6 @@
 #include <array>
 
 // 1-to-1 port of references/downstack-practice/script7.js — TSD variant.
-//
-// Every cell in the grid is either 0 (empty) or 1 (garbage). There are NO
-// protected cells: reverse construction can uncarve ANY garbage cell,
-// including the overhang cap and the wall. The reference's
-// `is_few_non_cheese_hole` check (with mdhole_ind = 0) effectively requires
-// the overhang cap to be uncarved during reverse construction — otherwise
-// the count of non-cheese holes stays above 0 and the puzzle is rejected.
-//
-// Net effect: the initial board shown to the player usually does NOT display
-// the TSD setup; the setup has to be built back up through downstacking.
 
 namespace {
 

@@ -24,7 +24,6 @@ public:
   bool undo_allowed() const override { return false; }
   std::optional<EvalType> default_eval_type() const override { return EvalType::Sprint; }
 
-
   void on_piece_locked(const eng::PieceLocked &, const GameState &state,
                        CommandBuffer &cmds) override {
     if (state.lines_cleared >= target_lines_)
