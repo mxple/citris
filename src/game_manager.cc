@@ -1,7 +1,9 @@
 #include "game_manager.h"
 #include "controller/ai_controller.h"
 #include "controller/player_controller.h"
+#include "controller/tbp_controller.h"
 #include "controller/tool_controller.h"
+#include "tbp/internal_bot.h"
 #include "ui/game_ui.h"
 
 #include <imgui.h>
@@ -38,8 +40,10 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
     game2_ = std::make_unique<Game>(*mode2_, std::move(board2));
     mode2_->on_start(now);
     game2_->drain_events();
-    // Phase 1: controllers2_ stays empty. Phase 4 will populate it with a
-    // TbpController driving the AI opponent.
+    // Default opponent: Citris's own AI via an in-process TbpBot. Phase 6
+    // will add external-bot / human selection from the menu.
+    controllers2_.push_back(std::make_unique<TbpController>(
+        std::make_unique<tbp::InternalTbpBot>()));
   }
 }
 
@@ -70,10 +74,12 @@ void GameManager::reset() {
     Board board2;
     mode2_->setup_board(board2);
     game2_ = std::make_unique<Game>(*mode2_, std::move(board2));
-    for (auto &ctrl : controllers2_)
-      ctrl->reset_input_state();
     mode2_->on_start(now);
     game2_->drain_events();
+    // Reset after the new game exists so TbpController's next tick re-starts
+    // the bot against the fresh board.
+    for (auto &ctrl : controllers2_)
+      ctrl->reset_input_state();
   }
 }
 
