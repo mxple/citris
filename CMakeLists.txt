@@ -69,6 +69,8 @@ else()
   find_package(imgui CONFIG REQUIRED)
 endif()
 
+find_package(nlohmann_json CONFIG REQUIRED)
+
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
 set(FONT_HEADER "${CMAKE_BINARY_DIR}/generated/FreeMono_otf.h")
@@ -95,6 +97,7 @@ file(GLOB LIB_SOURCES
   "src/ai/*.cc"
   "src/ai/pc/*.cc"
   "src/ai/eval/*.cc"
+  "src/tbp/*.cc"
 )
 list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
@@ -108,9 +111,10 @@ target_include_directories(tetris_lib PUBLIC
   src/ai
   src/ai/pc
   src/ai/eval
+  src/tbp
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json)
 if(NOT EMSCRIPTEN)
   target_link_libraries(tetris_lib PUBLIC Threads::Threads)
 endif()
