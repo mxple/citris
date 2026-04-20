@@ -45,8 +45,10 @@ public:
   // Render the full game scene (hold area, playfield, current piece,
   // preview area, plan overlay) into an internal SDL_Texture
   // of fixed size (kSceneCols * kSkinTile) × (kSceneRows * kSkinTile).
+  // `slot` selects which of two internal textures to use — versus mode
+  // passes slot=0 for the left board and slot=1 for the right.
   // The caller is responsible for scaling this texture to the display target.
-  SDL_Texture *draw_scene_to_texture(const ViewModel &vm);
+  SDL_Texture *draw_scene_to_texture(const ViewModel &vm, int slot = 0);
 
   static constexpr int kSceneTexWidth =
       RenderLayout::kSceneCols * RenderLayout::kTileSize;
@@ -68,6 +70,10 @@ private:
   void draw_mini_piece(PieceType type, bool greyed, float region_col,
                        float region_y_up);
   void draw_plan_overlay(const std::vector<PlannedPlacement> &placements);
+  // Vertical amber bar, drawn inside the scene texture just left of the
+  // playfield. Height is proportional to `pending_lines` and clamped to the
+  // playfield height so it can never overflow the scene bounds.
+  void draw_garbage_meter(int pending_lines);
 
   void draw_tile(float x, float y, int tile_idx, Color tint = Color::White());
   void draw_solid(const SDL_FRect &dst, Color color);
@@ -79,5 +85,7 @@ private:
 
   std::array<SDL_FRect, RenderLayout::kSkinTiles> skin_src_;
 
-  SDL_Texture *scene_tex_ = nullptr;
+  // Two render targets so versus mode can hold both boards simultaneously
+  // without a per-frame texture recreate. Lazily allocated in slot 1.
+  SDL_Texture *scene_tex_[2] = {nullptr, nullptr};
 };

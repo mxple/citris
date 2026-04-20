@@ -60,6 +60,9 @@ private:
   std::unique_ptr<Game> game2_;
   std::vector<std::unique_ptr<IController>> controllers2_;
   CommandBuffer cmds2_;
+  Stats stats2_;
   MatchState match_state_;
   std::mt19937 gap_rng_{0xC17150};
+
+  VersusViewModel build_versus_view_model(TimePoint now);
 };

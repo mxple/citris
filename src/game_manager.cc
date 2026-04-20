@@ -49,6 +49,7 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
 
 void GameManager::reset() {
   stats_.reset();
+  stats2_.reset();
   cmds_.clear();
   cmds2_.clear();
   match_state_ = MatchState{};
@@ -209,13 +210,18 @@ run_start:
       ctrl->draw_imgui();
     mode_->draw_imgui();
 
-    ViewModel vm = build_view_model(now);
-    std::vector<IController *> ctrl_ptrs;
-    ctrl_ptrs.reserve(controllers_.size());
-    for (auto &c : controllers_)
-      ctrl_ptrs.push_back(c.get());
-    draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
-                 ctrl_ptrs, &ai_state_, ai_controller_);
+    if (game2_) {
+      VersusViewModel vvm = build_versus_view_model(now);
+      draw_versus_ui(*game_renderer_, window_, vvm, settings_);
+    } else {
+      ViewModel vm = build_view_model(now);
+      std::vector<IController *> ctrl_ptrs;
+      ctrl_ptrs.reserve(controllers_.size());
+      for (auto &c : controllers_)
+        ctrl_ptrs.push_back(c.get());
+      draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
+                   ctrl_ptrs, &ai_state_, ai_controller_);
+    }
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
@@ -276,12 +282,13 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
 }
 
 void GameManager::process_p2_events(TimePoint now, CommandBuffer &rule_cmds) {
-  // Phase 1: game2 has no Stats / AIState / undo handling. Drain events,
-  // forward to controllers2_ (empty for now) and let mode2_ react.
+  // Drain events from game2, forward to controllers2_ and stats2_, let
+  // mode2_ react. No AIState / undo handling yet (p2 is AI-driven today).
   auto events = game2_->drain_events();
   for (auto &ev : events) {
     for (auto &ctrl : controllers2_)
       ctrl->notify(ev, now);
+    stats2_.process_event(ev, now);
     if (auto *pl = std::get_if<eng::PieceLocked>(&ev))
       mode2_->on_piece_locked(*pl, game2_->state(), rule_cmds);
   }
@@ -295,7 +302,11 @@ ViewModel GameManager::build_view_model(TimePoint now) {
 
   HudData hud;
   mode_->fill_hud(hud, vm.state, now);
-  if (!hud.center_text.empty() || !hud.game_over_label.empty())
+  // In versus mode, surface queued incoming garbage so the UI meter can
+  // render it. In single-player the value is always zero.
+  if (game2_) hud.pending_garbage_lines = game_->pending_garbage_lines();
+  if (!hud.center_text.empty() || !hud.game_over_label.empty() ||
+      hud.pending_garbage_lines > 0)
     vm.hud = std::move(hud);
 
   mode_->fill_plan_overlay(vm, vm.state);
@@ -305,4 +316,26 @@ ViewModel GameManager::build_view_model(TimePoint now) {
     ctrl->fill_plan_overlay(vm, vm.state);
 
   return vm;
+}
+
+VersusViewModel GameManager::build_versus_view_model(TimePoint now) {
+  VersusViewModel vvm;
+  vvm.left = build_view_model(now);
+
+  // Build right side in-place — mirrors build_view_model but against game2_.
+  ViewModel &right = vvm.right;
+  right.state = game2_->state();
+  right.stats = stats2_.snapshot(now);
+  HudData hud;
+  mode2_->fill_hud(hud, right.state, now);
+  hud.pending_garbage_lines = game2_->pending_garbage_lines();
+  if (!hud.center_text.empty() || !hud.game_over_label.empty() ||
+      hud.pending_garbage_lines > 0)
+    right.hud = std::move(hud);
+  mode2_->fill_plan_overlay(right, right.state);
+  for (auto &ctrl : controllers2_)
+    ctrl->fill_plan_overlay(right, right.state);
+
+  vvm.match = match_state_;
+  return vvm;
 }

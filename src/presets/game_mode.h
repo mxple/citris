@@ -19,6 +19,14 @@ public:
 
   virtual std::string title() const { return "Freeplay"; }
 
+  // Versus hook: if this mode represents a 1v1 match, return a fresh
+  // GameMode instance for the opponent. Default returns nullptr
+  // (single-player). GameManager's constructor takes this as mode2.
+  virtual std::unique_ptr<GameMode>
+  opponent_mode(const class Settings &) const {
+    return nullptr;
+  }
+
   // Tuning
   virtual std::chrono::milliseconds gravity_interval() const {
     return std::chrono::milliseconds{10000};

@@ -1,5 +1,6 @@
 // Phase 1 verify: garbage routes p1 -> p2 via route_garbage_between, and the
-// receiver materializes the rows after garbage_delay. No SDL, no GameManager.
+// receiver materializes the rows on its next non-clearing piece lock (capped
+// at Game::kMaxGarbagePerLock). No SDL, no GameManager.
 
 #include "ai/placement.h"
 #include "engine/board.h"
@@ -10,18 +11,16 @@
 #include "match.h"
 #include "presets/game_mode.h"
 
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <random>
 
-using namespace std::chrono_literals;
-
 namespace {
 
 // Minimal mode for routing test. Disables gravity / lock delay so the
-// placement-via-cmd::Place path is the only mover. Short garbage delay keeps
-// the test fast. Optional pre-fill of the board for a guaranteed tetris.
+// placement-via-cmd::Place path is the only mover. Pre-fills board for a
+// guaranteed tetris when requested. Fixed I-heavy queue so the test is
+// deterministic.
 class TestRoutingMode : public GameMode {
 public:
   std::chrono::milliseconds gravity_interval() const override {
@@ -31,15 +30,14 @@ public:
     return std::chrono::milliseconds{-1};
   }
   std::chrono::milliseconds garbage_delay() const override {
-    return std::chrono::milliseconds{50};
+    // Zero delay so every non-clearing lock materializes immediately; the
+    // delay behavior is exercised in test_garbage_delay.
+    return std::chrono::milliseconds{0};
   }
   int max_lock_resets() const override { return 0; }
 
   void setup_board(Board &b) override {
-    if (!fill_for_tetris)
-      return;
-    // Fill columns 0..8 of bottom 4 rows; column 9 is the gap that the I
-    // piece will fill to clear 4 lines.
+    if (!fill_for_tetris) return;
     for (int row = 0; row < 4; ++row)
       for (int col = 0; col < 9; ++col)
         b.set_cell(col, row, CellColor::Garbage);
@@ -48,7 +46,7 @@ public:
   PieceQueue create_queue(unsigned) const override {
     auto src = std::make_unique<EmptySource>();
     std::vector<PieceType> prefix = {PieceType::I, PieceType::I, PieceType::I,
-                                     PieceType::I};
+                                     PieceType::I, PieceType::I, PieceType::I};
     return PieceQueue(std::move(src), std::move(prefix));
   }
 
@@ -73,8 +71,7 @@ int count_garbage_rows(const Board &b) {
     for (int col = 0; col < Board::kWidth; ++col)
       if (b.cell_color(col, row) == CellColor::Garbage)
         ++filled;
-    if (filled == Board::kWidth - 1)
-      ++rows;
+    if (filled == Board::kWidth - 1) ++rows;
   }
   return rows;
 }
@@ -94,34 +91,23 @@ int main() {
   Game game2(mode_p2, std::move(b2), 2);
   std::mt19937 gap_rng(0xC17150);
 
-  // Drain the spawn-time events both games emit during construction so they
-  // don't pollute later assertions.
   game1.drain_events();
   game2.drain_events();
 
-  // Place the I piece vertical in column 9 — Game::handle_place snaps to
-  // ground, so any starting y works. East rotation has cells at col_off=2,
-  // so x=7 puts the piece in column 9.
+  // Step 1: tetris-into-PC on game1 → 14 attack drained.
   CommandBuffer cmds1, cmds2;
   cmds1.push(cmd::Place{
       Placement{PieceType::I, Rotation::East, 7, 0, SpinKind::None}});
-
   auto t0 = SdlClock::now();
   game1.apply(cmds1);
   game1.tick(t0);
   cmds1.clear();
-  game2.apply(cmds2);
-  game2.tick(t0);
-  cmds2.clear();
-
-  // Discard PieceLocked / PieceSpawned events from the tetris.
   game1.drain_events();
-  game2.drain_events();
 
-  // Route garbage. game1 should have 4 attack pending; game2 has 0.
+  // Step 2: route attack. game2 hasn't moved yet.
   route_garbage_between(game1, game2, cmds1, cmds2, gap_rng);
 
-  EXPECT(cmds1.empty(), "expected no garbage routed back to p1");
+  EXPECT(cmds1.empty(), "no return-path garbage expected");
   int routed_lines = 0;
   int gap_col = -1;
   for (auto &c : cmds2) {
@@ -130,49 +116,90 @@ int main() {
       gap_col = g->gap_col;
     }
   }
-  // A 4-line clear that empties the board is a perfect clear (+10 bonus),
-  // so the actual figure here is 14. We assert the routing *invariant*
-  // (attack drained == garbage materialized) rather than the attack value
-  // so this test stays robust against attack-table changes.
-  EXPECT(routed_lines > 0, "expected positive attack routed, got %d",
+  EXPECT(routed_lines == 14,
+         "tetris+PC should yield 14 attack (4 tetris + 10 PC); got %d",
          routed_lines);
   EXPECT(gap_col >= 0 && gap_col < 10, "gap_col out of range: %d", gap_col);
 
-  // Apply the routed AddGarbage to game2 (queues it under garbage_delay).
+  // Step 3: queue the garbage on game2. Nothing materializes yet — the
+  // buffer only drains on a non-clearing piece lock.
   game2.apply(cmds2);
   cmds2.clear();
-  game2.drain_events(); // discard apply-time events if any
+  game2.drain_events();
+  EXPECT(game2.pending_garbage_lines() == 14,
+         "expected 14 lines buffered, got %d", game2.pending_garbage_lines());
+  EXPECT(count_garbage_rows(game2.state().board) == 0,
+         "no garbage should be on the board yet");
 
-  // Tick past the garbage_delay (50ms in our test mode).
-  auto t1 = t0 + 100ms;
-  game2.tick(t1);
+  // Step 4: place I horizontally in a column that avoids the gap so no line
+  // clears. I/North occupies cells (x..x+3, y+2). Pick x that doesn't include
+  // gap_col.
+  int safe_x = (gap_col <= 3) ? 5 : 0;
+  // Pass a high y so compute_ghost drops to the lowest valid position. Passing
+  // y=0 would start below any existing stack and compute_ghost only goes
+  // *down*, so it can't recover from a colliding start.
+  cmds2.push(cmd::Place{
+      Placement{PieceType::I, Rotation::North, static_cast<int8_t>(safe_x),
+                25, SpinKind::None}});
+  game2.apply(cmds2);
+  game2.tick(t0);
+  cmds2.clear();
 
-  int materialized = 0;
-  for (auto &ev : game2.drain_events()) {
+  int materialized_first = 0;
+  for (auto &ev : game2.drain_events())
     if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev))
-      materialized += gm->lines;
-  }
-  EXPECT(materialized == routed_lines,
-         "materialized (%d) != routed (%d) — routing lost data",
-         materialized, routed_lines);
+      materialized_first += gm->lines;
+  EXPECT(materialized_first == 8,
+         "first non-clear lock should materialize 8 (cap); got %d",
+         materialized_first);
+  EXPECT(game2.pending_garbage_lines() == 6,
+         "6 lines should remain buffered; got %d",
+         game2.pending_garbage_lines());
+  EXPECT(count_garbage_rows(game2.state().board) == 8,
+         "board should have exactly 8 garbage rows; got %d",
+         count_garbage_rows(game2.state().board));
 
-  // Verify the receiver's board now has `routed_lines` garbage rows (9 cells
-  // filled, 1 gap each).
-  int garbage_rows = count_garbage_rows(game2.state().board);
-  EXPECT(garbage_rows == routed_lines,
-         "board has %d garbage rows, expected %d", garbage_rows, routed_lines);
+  // Step 5: another non-clearing lock → remaining 6 lines materialize on
+  // the *same* gap column (partial-batch preservation).
+  int safe_x2 = safe_x; // same column; it lands one row above the previous I.
+  cmds2.push(cmd::Place{
+      Placement{PieceType::I, Rotation::North, static_cast<int8_t>(safe_x2),
+                25, SpinKind::None}});
+  game2.apply(cmds2);
+  game2.tick(t0);
+  cmds2.clear();
 
-  // Verify game1's pending_attack was zeroed (next drain returns 0).
+  int materialized_second = 0;
+  for (auto &ev : game2.drain_events())
+    if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev))
+      materialized_second += gm->lines;
+  EXPECT(materialized_second == 6,
+         "second non-clear lock should drain remaining 6; got %d",
+         materialized_second);
+  EXPECT(game2.pending_garbage_lines() == 0, "buffer should be empty");
+  EXPECT(count_garbage_rows(game2.state().board) == 14,
+         "board should have 14 garbage rows total; got %d",
+         count_garbage_rows(game2.state().board));
+
+  // Verify all 14 garbage rows share the same gap column (single-batch
+  // routing from a single tetris-PC must preserve the well).
+  int same_gap = 0;
+  for (int row = 0; row < 14; ++row)
+    if (game2.state().board.cell_color(gap_col, row) == CellColor::Empty)
+      ++same_gap;
+  EXPECT(same_gap == 14,
+         "all 14 garbage rows should share gap_col=%d; got %d", gap_col,
+         same_gap);
+
+  std::printf("PASS test_versus_routing: 14 attack -> 8 materialize -> 6 "
+              "materialize (gap_col=%d)\n",
+              gap_col);
+
+  // Sanity: p1 attack was drained, match still in progress.
   EXPECT(game1.drain_attack() == 0, "p1 attack should have been drained");
-
-  // MatchState: nobody topped out, both alive, no winner.
   MatchState match;
   update_match_state(match, game1, &game2);
   EXPECT(match.p1_alive && match.p2_alive && !match.winner,
-         "expected match still in progress");
-
-  std::printf("PASS test_versus_routing: %d attack -> %d garbage rows on p2 "
-              "(gap_col=%d)\n",
-              routed_lines, garbage_rows, gap_col);
+         "match still in progress");
   return 0;
 }

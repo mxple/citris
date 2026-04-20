@@ -2,8 +2,6 @@
 #include "presets/game_mode.h"
 #include "srs.h"
 
-#include "profiler.h"
-
 Game::Game(const GameMode &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)),
       queue_(mode_.create_queue(seed)) {
@@ -61,10 +59,8 @@ void Game::tick(TimePoint now) {
     lock_delay_deadline_.reset();
     handle_lock_delay_expired();
   }
-  if (garbage_delay_deadline_ && now_ >= *garbage_delay_deadline_) {
-    garbage_delay_deadline_.reset();
-    handle_garbage_delay_expired();
-  }
+  // Garbage is not time-driven — it materializes on the next non-clearing
+  // piece lock (see handle_place / lock_piece).
 }
 
 GameState Game::state() const {
@@ -100,7 +96,6 @@ std::optional<TimePoint> Game::next_deadline() const {
   };
   consider(gravity_deadline_);
   consider(lock_delay_deadline_);
-  consider(garbage_delay_deadline_);
   return earliest;
 }
 
@@ -255,6 +250,11 @@ void Game::handle_place(const cmd::Place &c) {
   hold_available_ = true;
   gravity_deadline_.reset();
   lock_delay_deadline_.reset();
+  // Buffered garbage materializes only on a non-clearing lock. Runs before
+  // spawn_piece so the new piece sees (and possibly collides with) the new
+  // garbage for correct top-out handling.
+  if (cleared == 0)
+    materialize_buffered_garbage(kMaxGarbagePerLock);
   spawn_piece();
   dirty_ = true;
 }
@@ -281,26 +281,59 @@ void Game::handle_lock_delay_expired() {
 }
 
 void Game::handle_garbage_received(int lines, int gap_col, bool immediate) {
+  if (lines <= 0) return;
   if (immediate) {
+    // Bypass the buffer entirely (used by modes like Cheese that seed
+    // garbage before play starts).
     board_.add_garbage(lines, gap_col);
     pending_events_.push_back(eng::GarbageMaterialized{lines});
     dirty_ = true;
   } else {
-    pending_garbage_.push_back({lines, gap_col});
-    garbage_delay_deadline_ = now_ + mode_.garbage_delay();
+    pending_garbage_.push({lines, gap_col, now_});
   }
 }
 
-void Game::handle_garbage_delay_expired() {
-  int total_lines = 0;
-  for (auto &g : pending_garbage_) {
-    board_.add_garbage(g.lines, g.gap_col);
-    total_lines += g.lines;
+int Game::cancel_buffered_garbage(int amount) {
+  if (amount <= 0) return 0;
+  int cancelled = 0;
+  // FIFO: oldest attacks cancel first 
+  while (!pending_garbage_.empty() && cancelled < amount) {
+    auto &front = pending_garbage_.back();
+    int want = std::min(front.lines, amount - cancelled);
+    front.lines -= want;
+    cancelled += want;
+    if (front.lines == 0) pending_garbage_.pop();
   }
-  pending_garbage_.clear();
-  if (total_lines > 0)
-    pending_events_.push_back(eng::GarbageMaterialized{total_lines});
-  dirty_ = true;
+  return cancelled;
+}
+
+void Game::materialize_buffered_garbage(int cap) {
+  if (cap <= 0 || pending_garbage_.empty()) return;
+  int materialized = 0;
+  const auto delay = mode_.garbage_delay();
+  // Walk FIFO front-to-back. Oldest batch first — it lands at the bottom
+  // initially and subsequent batches from the same call push it up,
+  // matching the "garbage rises from below" semantic. Partial batches keep
+  // their well by decrementing the front entry in place.
+  //
+  // Eligibility gate: a batch cannot materialize until it has been
+  // buffered for at least garbage_delay. Because the queue is FIFO, if the
+  // front isn't eligible then nothing after it is, so we can break.
+  while (!pending_garbage_.empty() && materialized < cap) {
+    auto &front = pending_garbage_.front();
+    if (now_ - front.arrival_time < delay) break;
+    int want = std::min(front.lines, cap - materialized);
+    board_.add_garbage(want, front.gap_col);
+    front.lines -= want;
+    materialized += want;
+    if (front.lines == 0) {
+      pending_garbage_.pop();
+    }
+  }
+  if (materialized > 0) {
+    pending_events_.push_back(eng::GarbageMaterialized{materialized});
+    dirty_ = true;
+  }
 }
 
 void Game::handle_set_game_over(bool won) {
@@ -379,6 +412,8 @@ void Game::lock_piece() {
   hold_available_ = true;
   gravity_deadline_.reset();
   lock_delay_deadline_.reset();
+  if (cleared == 0)
+    materialize_buffered_garbage(kMaxGarbagePerLock);
   spawn_piece();
 }
 
@@ -434,7 +469,6 @@ void Game::restore_snapshot(const GameSnapshot &snap) {
 
   gravity_deadline_.reset();
   lock_delay_deadline_.reset();
-  garbage_delay_deadline_.reset();
 
   arr_direction_.reset();
   soft_drop_active_ = false;

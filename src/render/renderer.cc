@@ -61,8 +61,8 @@ Renderer::Renderer(SDL_Renderer *renderer, const Settings &settings)
 }
 
 Renderer::~Renderer() {
-  if (scene_tex_)
-    SDL_DestroyTexture(scene_tex_);
+  for (SDL_Texture *t : scene_tex_)
+    if (t) SDL_DestroyTexture(t);
   if (skin_)
     SDL_DestroyTexture(skin_);
 }
@@ -94,17 +94,19 @@ void Renderer::load_skin() {
   }
 }
 
-SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
+SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm, int slot) {
   const auto &state = vm.state;
   constexpr int kTile = L::kTileSize; // 30
   constexpr int kTargetW = L::kSceneCols * kTile;
   constexpr int kTargetH = L::kSceneRows * kTile;
 
-  if (!scene_tex_) {
-    scene_tex_ =
-        SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                          SDL_TEXTUREACCESS_TARGET, kTargetW, kTargetH);
-    if (!scene_tex_) {
+  if (slot < 0 || slot > 1) slot = 0;
+  SDL_Texture *&tex = scene_tex_[slot];
+
+  if (!tex) {
+    tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
+                            SDL_TEXTUREACCESS_TARGET, kTargetW, kTargetH);
+    if (!tex) {
       std::cerr << "Failed to create scene render texture: " << SDL_GetError()
                 << "\n";
       return nullptr;
@@ -112,8 +114,8 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
     // Scene texture is upscaled by ImGui to the window - keep it nearest so
     // the 30px cells stay crisp at any integer multiple and only blur on
     // non-integer fractions (which is unavoidable without per-frame resize).
-    SDL_SetTextureScaleMode(scene_tex_, SDL_SCALEMODE_NEAREST);
-    SDL_SetTextureBlendMode(scene_tex_, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
   }
 
   // Save and clear any global render scale while drawing into our target
@@ -121,7 +123,7 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
   // coords to physical; it shouldn't apply to our pixel-accurate target).
   float saved_sx = 1.f, saved_sy = 1.f;
   SDL_GetRenderScale(renderer_, &saved_sx, &saved_sy);
-  SDL_SetRenderTarget(renderer_, scene_tex_);
+  SDL_SetRenderTarget(renderer_, tex);
   SDL_SetRenderScale(renderer_, 1.f, 1.f);
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
@@ -149,6 +151,11 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
     draw_mini_piece(state.queue[i], false, L::kNextColX, 17 - 3 * i);
   }
 
+  // Versus garbage meter — drawn inside the scene so it's bounded by the
+  // playfield pixels rather than floating in ImGui space.
+  if (vm.hud && vm.hud->pending_garbage_lines > 0)
+    draw_garbage_meter(vm.hud->pending_garbage_lines);
+
   // Game-over darken overlay above everything.
   if (state.game_over) {
     constexpr float play_x = L::kBoardColX * L::kTileSize;
@@ -159,7 +166,7 @@ SDL_Texture *Renderer::draw_scene_to_texture(const ViewModel &vm) {
   }
   SDL_SetRenderTarget(renderer_, nullptr);
   SDL_SetRenderScale(renderer_, saved_sx, saved_sy);
-  return scene_tex_;
+  return tex;
 }
 
 void Renderer::draw_play_background() {
@@ -293,6 +300,32 @@ void Renderer::draw_tile(float x, float y, int tile_idx, Color tint) {
 void Renderer::draw_solid(const SDL_FRect &dst, Color color) {
   SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
   SDL_RenderFillRect(renderer_, &dst);
+}
+
+void Renderer::draw_garbage_meter(int pending_lines) {
+  constexpr float t = L::kTileSize;
+  int clamped = std::min(pending_lines, L::kPlayRows);
+  if (clamped <= 0) return;
+  // Thin vertical strip just left of the playfield (rightmost ~22% of the
+  // cell immediately inside the hold column).
+  constexpr float meter_w = t * 0.22f;
+  const float board_left = L::kBoardColX * t;
+  const float bar_x1 = board_left - 1.f;
+  const float bar_x0 = bar_x1 - meter_w;
+
+  // Playfield pixel bounds. row_px(y_up) converts scene-local y_up (with 0
+  // at the bottom of the play area) to the top pixel of that cell.
+  const float play_top = row_px(L::kPlayRows - 1);     // top row top-edge
+  const float play_bottom = row_px(0) + t;             // bottom row bottom-edge
+
+  // Background track so the meter reads as a bar even when near-empty.
+  draw_solid({bar_x0, play_top, bar_x1 - bar_x0, play_bottom - play_top},
+             Color(25, 20, 15, 160));
+
+  float fill_h = static_cast<float>(clamped) * t;
+  float bar_y0 = play_bottom - fill_h;
+  draw_solid({bar_x0, bar_y0, bar_x1 - bar_x0, fill_h},
+             Color(255, 154, 40, 230));
 }
 
 void Renderer::draw_plan_overlay(
