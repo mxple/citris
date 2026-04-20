@@ -30,7 +30,7 @@ namespace tbp {
 
 struct InternalBotConfig {
   std::string name = "Citris";
-  std::string version = "0.1.0";
+  std::string version = "0.1.2";
   std::string author = "mxple";
   int beam_width = 800;
   int max_depth = 14;
