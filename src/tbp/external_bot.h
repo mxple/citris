@@ -52,10 +52,23 @@ public:
   std::optional<Suggestion> poll_suggestion() override;
   void play(const Play &) override;
   void new_piece(const NewPiece &) override;
+  void request_suggestion() override;
   void stop() override;
   void quit() override;
 
   bool alive() const { return !reader_done_.load(); }
+
+  // Non-TbpBot accessor: the most recent suggestion's moves list (top
+  // preference first). Cached on every successful poll_suggestion(); cleared
+  // on start / stop / play / quit so a stale plan doesn't render after the
+  // relevant piece has been played. TbpController downcasts to this type
+  // to render external-bot plans alongside internal-bot PVs.
+  std::vector<Move> last_plan_moves() const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return last_plan_moves_;
+  }
+
+  std::vector<Placement> last_plan() const override;
 
 private:
   void spawn();
@@ -83,6 +96,22 @@ private:
 
   Info cached_info_{};
   bool info_ready_ = false;
+
+  // Stale-response guard. Every Suggest message we write bumps
+  // suggests_sent_; every Suggestion the reader parses bumps
+  // suggestions_received_. On start()/stop() we snapshot suggests_sent_ into
+  // stale_cutoff_ — the reader drops any Suggestion whose received ordinal
+  // is <= stale_cutoff_, because those responses are for requests from a
+  // session we've abandoned. Without this, a reset fired while the child is
+  // mid-search will deliver the pre-reset suggestion into the post-reset
+  // inbox, desyncing the controller.
+  std::atomic<int> suggests_sent_{0};
+  std::atomic<int> suggestions_received_{0};
+  int stale_cutoff_ = 0; // guarded by mu_
+
+  // Guarded by mu_ (same lock as inbox_) so readers through the accessor
+  // can't observe torn state if a poll races with a fill_plan_overlay.
+  std::vector<Move> last_plan_moves_;
 };
 
 } // namespace tbp

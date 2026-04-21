@@ -38,6 +38,8 @@ void InternalTbpBot::start(const Start &s) {
   }
   hold_available_ = true;
   attack_ = make_attack_state(s.combo, s.back_to_back);
+  // Previous game's PV is meaningless against a fresh position.
+  last_pv_.clear();
   launch_search();
 }
 
@@ -52,13 +54,17 @@ std::optional<Suggestion> InternalTbpBot::poll_suggestion() {
   BeamResult result = task_->get();
   task_.reset(); // single-shot — next launch_search() builds a new task
 
+  // Cache the full PV so the controller can render it as a plan overlay.
+  // Replaces any stale PV from a previous search.
+  last_pv_ = std::move(result.pv);
+
   Suggestion sug;
   // Prefer the principal-variation head as our top choice. If pv is empty
   // (degenerate), forfeit by sending an empty moves list per the spec.
-  if (!result.pv.empty()) {
+  if (!last_pv_.empty()) {
     Move m;
-    m.location = placement_to_location(result.pv.front());
-    m.spin = spin_to_str(result.pv.front().spin);
+    m.location = placement_to_location(last_pv_.front());
+    m.spin = spin_to_str(last_pv_.front().spin);
     sug.moves.push_back(std::move(m));
   }
   // Optional move_info for diagnostics.
@@ -116,6 +122,15 @@ void InternalTbpBot::play(const Play &p) {
   int cleared = board_.clear_lines();
   (void)compute_attack_and_update_state(attack_, cleared, plc.spin);
 
+  // Advance the cached PV in lockstep: the placement we just played was
+  // last_pv_.front (assuming no external override), so drop it. If something
+  // unexpected lands (type mismatch, external play()), just clear the PV —
+  // it's stale and shouldn't be rendered.
+  if (!last_pv_.empty() && last_pv_.front().type == plc.type)
+    last_pv_.erase(last_pv_.begin());
+  else
+    last_pv_.clear();
+
   hold_available_ = true;
   needs_restart_ = true;
 }
@@ -139,6 +154,7 @@ void InternalTbpBot::launch_search() {
     task_->cancel();
     task_.reset();
   }
+  needs_restart_ = false;
   if (queue_.empty()) return; // nothing to plan with
 
   BeamInput input;

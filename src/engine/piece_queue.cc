@@ -15,6 +15,8 @@ void PieceQueue::prefetch(int n) {
     if (!next)
       return;
     buffer_.push_back(*next);
+    if (on_added_)
+      on_added_(*next);
   }
 }
 

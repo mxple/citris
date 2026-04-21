@@ -13,10 +13,12 @@
 //                                -> stop()
 //   Then start() can be called again for a new game, or quit() to terminate.
 
+#include "ai/placement.h"
 #include "tbp/types.h"
 
 #include <optional>
 #include <variant>
+#include <vector>
 
 namespace tbp {
 
@@ -44,11 +46,24 @@ public:
   // Frontend appends a piece to the queue.
   virtual void new_piece(const NewPiece &) = 0;
 
+  // Ask the bot for its current best move. For external bots this emits a
+  // TBP Suggest message over the wire; for in-process bots it's typically a
+  // no-op (they're always calculating). Decoupling this from play() lets the
+  // controller issue Suggest *after* relaying new_piece() updates, so the
+  // bot searches on the full queue rather than a stale prefix.
+  virtual void request_suggestion() {}
+
   // Pause calculation but stay alive (next start() may begin a new game).
   virtual void stop() = 0;
 
   // Tear down. After this, the bot should not be used.
   virtual void quit() = 0;
+
+  // Cached principal variation / plan from the most recent poll, as engine
+  // Placements. Used for plan-overlay rendering. Default: empty (bots that
+  // don't expose a PV simply render nothing). The returned vector is a
+  // snapshot — callers can consume it without locking.
+  virtual std::vector<Placement> last_plan() const { return {}; }
 };
 
 } // namespace tbp

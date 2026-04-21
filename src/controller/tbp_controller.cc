@@ -1,91 +1,185 @@
 #include "controller/tbp_controller.h"
 
+#include "ai/board_bitset.h"
 #include "ai/placement.h"
+#include "ai/plan.h"
+#include "ai/plan_overlay.h"
 #include "engine_event.h"
+#include "game_state.h"
+#include "log.h"
 #include "tbp/conversions.h"
+#include "tbp/external_bot.h"
+#include "tbp/internal_bot.h"
 #include "tbp/types.h"
 
 #include <variant>
 
-TbpController::TbpController(std::unique_ptr<tbp::TbpBot> bot)
-    : bot_(std::move(bot)) {
+TbpController::TbpController(std::unique_ptr<tbp::TbpBot> bot,
+                             int think_time_ms)
+    : bot_(std::move(bot)), think_time_ms_(think_time_ms) {
   // Accept rules optimistically. InternalTbpBot always returns Ready; for
   // external bots the caller is expected to verify this before wiring in.
   (void)bot_->rules(tbp::Rules{});
 }
 
 TbpController::~TbpController() {
-  if (bot_) bot_->quit();
+  if (bot_)
+    bot_->quit();
 }
 
-void TbpController::reset_input_state() {
-  // Mark for re-start on next tick. The bot retains its search thread and
-  // will cancel + relaunch when start() is called with the new position.
-  started_ = false;
-  bot_queue_tail_idx_ = -1;
-  pending_placed_type_.reset();
+void TbpController::reset() {
+  // Mark the controller for a fresh Start on the next tick and drop everything
+  // tied to the old session.
+  phase_ = Phase::Cold;
+  needs_suggest_ = true;
+  pending_sug_.reset();
+
+  bot_->stop();
 }
 
 void TbpController::tick(TimePoint now, const GameState &state,
                          CommandBuffer &cmds) {
-  (void)now;
-  if (state.game_over) return;
+  if (state.game_over)
+    return;
 
-  if (!started_) {
-    send_start(state);
-    started_ = true;
-    return; // give the search a tick to begin
+  if (phase_ == Phase::Cold) {
+    resync(state);
+    return;
   }
 
-  catch_up_queue(state);
+  // Always poll — keeps the bot's plan cache (last_pv / last_plan_moves)
+  // fresh regardless of whether we're allowed to place this tick.
+  if (auto fresh = bot_->poll_suggestion()) {
+    needs_suggest_ = true;
+    pending_sug_ = std::move(*fresh);
+  }
 
-  if (pending_placed_type_) return; // waiting for the Game to lock our piece
+  if (phase_ == Phase::Placing) [[unlikely]] {
+    LOG_WARN("Game didn't lock our last played piece?");
+    return;
+  }
 
-  auto sug = bot_->poll_suggestion();
-  if (!sug) return;
-  if (sug->moves.empty()) return; // bot forfeits — just don't act
+  // Rate cap: stall until the configured think time has elapsed since the
+  // last placement was emitted.
+  if (think_time_ms_ > 0) {
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - last_placement_time_);
+    if (elapsed.count() < think_time_ms_)
+      return;
+  }
+
+  if (!pending_sug_ || pending_sug_->moves.empty()) {
+    return;
+  }
+
+  // Place suggested piece
+  auto sug = std::move(pending_sug_);
+  pending_sug_.reset();
 
   const auto &move = sug->moves.front();
   auto placed_type = tbp::piece_type_from_str(move.location.type);
-  if (!placed_type) return;
+  if (!placed_type) [[unlikely]] {
+    LOG_ERROR("placed_type invalid, bad message?");
+    resync(state);
+    return;
+  }
 
-  // Hold inference: if the bot's chosen piece type differs from the current
-  // piece in play, emit Input::Hold first. The Game will swap (or pop from
-  // queue into hold if empty), and the next piece will match the placement.
+  // Hold inference
   if (*placed_type != state.current_piece.type) {
-    if (!state.hold_available) {
-      // Can't hold right now — drop the suggestion and let the bot re-search
-      // on the next tick.
+    if (!state.hold_available) [[unlikely]] {
+      LOG_WARN("{}:{} Hold not available?", __FILE__, __LINE__);
+      resync(state);
       return;
     }
     cmds.push(cmd::MovePiece{Input::Hold});
   }
 
-  Placement p = tbp::location_to_placement(move.location,
-                                           tbp::spin_from_str(move.spin));
+  Placement p =
+      tbp::location_to_placement(move.location, tbp::spin_from_str(move.spin));
   cmds.push(cmd::Place{p});
-  pending_placed_type_ = *placed_type;
+  phase_ = Phase::Placing;
+  last_placement_time_ = now;
 }
 
-void TbpController::notify(const EngineEvent &ev, TimePoint now) {
+void TbpController::notify(const EngineEvent &ev, TimePoint now, const GameState &state) {
   (void)now;
   if (auto *pl = std::get_if<eng::PieceLocked>(&ev)) {
-    // Tell the bot the move was played.
+    phase_ = Phase::Ready;
     Placement placed{pl->type, pl->rotation, pl->x, pl->y, pl->spin};
     tbp::Move m;
     m.location = tbp::placement_to_location(placed);
     m.spin = tbp::spin_to_str(pl->spin);
     bot_->play(tbp::Play{m});
-    pending_placed_type_.reset();
-    // The new_piece catch-up happens on the next tick (we don't have state
-    // here). This is fine — the bot just started searching again and our
-    // poll on the next tick will either get a result or nullopt.
+  } else if (auto *qr = std::get_if<eng::QueueRefill>(&ev)) {
+    // A new piece entered the preview tail. Forward to the bot.
+    bot_->new_piece(
+        tbp::NewPiece{std::string(tbp::piece_type_to_str(qr->piece))});
+  } else if (std::holds_alternative<eng::GarbageMaterialized>(ev)) {
+    // restart since board state is desynced
+    resync(state);
+  } else if (std::holds_alternative<eng::UndoPerformed>(ev)) {
+    // Queue, board, and hold all rewound — the bot's cached state is stale.
+    resync(state);
+  } else if (std::holds_alternative<eng::IllegalPlacement>(ev)) {
+    // restart misbehaving bot
+    LOG_INFO("Misbehaving bot, resyncing");
+    resync(state);
   } else if (std::holds_alternative<eng::GameOver>(ev)) {
     bot_->stop();
   }
 }
 
-void TbpController::send_start(const GameState &state) {
+void TbpController::post_hook(TimePoint now, const GameState &state) {
+  (void)now;
+  (void)state;
+  if (state.game_over)
+    return;
+
+  // request in post_hook giving bot ~1 frame before polling its suggestion
+  if (needs_suggest_) {
+    needs_suggest_ = false;
+    bot_->request_suggestion();
+  }
+}
+
+void TbpController::fill_plan_overlay(ViewModel &vm, const GameState &state) {
+  if (!show_plan_)
+    return;
+
+  // Only the placement field of Plan::Step is consumed by
+  // build_plan_overlay; the rest stays default.
+  auto plan = bot_->last_plan();
+  if (plan.empty())
+    return;
+  std::vector<Plan::Step> steps;
+  steps.reserve(plan.size());
+  for (const auto &p : plan) {
+    Plan::Step step;
+    step.placement = p;
+    steps.push_back(std::move(step));
+  }
+
+  // Defensive: only render if the first planned step actually plays the
+  // current piece (or held piece — bot may intend to hold-then-play). This
+  // filters out a brief window after PieceLocked where the cache might
+  // still describe the piece we just placed (esp. for external bots that
+  // rely on the next poll to refresh).
+  PieceType first_type = steps.front().placement.type;
+  bool type_ok = first_type == state.current_piece.type ||
+                 (state.hold_piece && *state.hold_piece == first_type);
+  if (!type_ok)
+    return;
+
+  BoardBitset sim = BoardBitset::from_board(state.board);
+  vm.plan_overlay =
+      build_plan_overlay(std::move(sim), steps, /*max_visible=*/7);
+}
+
+void TbpController::resync(const GameState &state) {
+  // Stop any in-flight search so the bot doesn't hand us a suggestion based
+  // on the pre-resync state.
+  bot_->stop();
+
   tbp::Start s;
   // TBP queue[0] = current piece in play; Citris tracks current separately.
   s.queue.reserve(state.queue.size() + 1);
@@ -99,22 +193,8 @@ void TbpController::send_start(const GameState &state) {
   s.board = tbp::board_to_tbp(state.board);
   bot_->start(s);
 
-  // Furthest absolute index covered by start(): current_piece_abs_idx is
-  // state.queue_draws - 1 (the piece that was popped); the last queue item's
-  // abs idx is state.queue_draws + state.queue.size() - 1.
-  bot_queue_tail_idx_ = static_cast<int64_t>(state.queue_draws) +
-                         static_cast<int64_t>(state.queue.size()) - 1;
-}
-
-void TbpController::catch_up_queue(const GameState &state) {
-  int64_t tail_now = static_cast<int64_t>(state.queue_draws) +
-                     static_cast<int64_t>(state.queue.size()) - 1;
-  if (tail_now <= bot_queue_tail_idx_) return;
-  for (int64_t idx = bot_queue_tail_idx_ + 1; idx <= tail_now; ++idx) {
-    int pos = static_cast<int>(idx - static_cast<int64_t>(state.queue_draws));
-    if (pos < 0 || pos >= static_cast<int>(state.queue.size())) continue;
-    bot_->new_piece(tbp::NewPiece{
-        std::string(tbp::piece_type_to_str(state.queue[pos]))});
-  }
-  bot_queue_tail_idx_ = tail_now;
+  // Flush any stale suggestion captured from the pre-resync search.
+  pending_sug_.reset();
+  needs_suggest_ = true;
+  phase_ = Phase::Ready;
 }

@@ -97,3 +97,45 @@ inline constexpr Vec2 spawn_position(PieceType type) {
     return {3, 18};
   }
 }
+
+// clang-format off
+template <>
+struct fmt::formatter<PieceType> : fmt::formatter<char> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+    template <typename FormatContext>
+    auto format(PieceType type, FormatContext& ctx) const {
+        char c = '?';
+        switch (type) {
+            case PieceType::I: c = 'I'; break;
+            case PieceType::O: c = 'O'; break;
+            case PieceType::T: c = 'T'; break;
+            case PieceType::S: c = 'S'; break;
+            case PieceType::Z: c = 'Z'; break;
+            case PieceType::J: c = 'J'; break;
+            case PieceType::L: c = 'L'; break;
+        }
+        return fmt::formatter<char>::format(c, ctx);
+    }
+};
+
+template <>
+struct fmt::formatter<Rotation> : fmt::formatter<char> {
+      constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+    template <typename FormatContext>
+    auto format(Rotation r, FormatContext& ctx) const {
+        char c = '?';
+        switch (r) {
+            case Rotation::North: c = 'N'; break;
+            case Rotation::East: c = 'E'; break;
+            case Rotation::South: c = 'S'; break;
+            case Rotation::West: c = 'W'; break;
+        }
+        return fmt::formatter<char>::format(c, ctx);
+    }
+};
+
+// clang-format on

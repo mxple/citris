@@ -65,7 +65,7 @@ const char *spin_to_str(SpinKind s) {
 
 SpinKind spin_from_str(std::string_view s) {
   if (s == "mini") return SpinKind::Mini;
-  if (s == "full") return SpinKind::TSpin; // we lose AllSpin distinction here
+  if (s == "full") return SpinKind::AllSpin; // we lose AllSpin distinction here
   return SpinKind::None;
 }
 
@@ -125,6 +125,8 @@ Placement location_to_placement(const PieceLocation &loc, SpinKind spin) {
   auto type = piece_type_from_str(loc.type).value_or(PieceType::I);
   auto rot = rotation_from_str(loc.orientation).value_or(Rotation::North);
   auto off = center_offset(type, rot);
+  if (type == PieceType::T && spin == SpinKind::AllSpin) 
+    spin = SpinKind::TSpin;
   return Placement{
       .type = type,
       .rotation = rot,

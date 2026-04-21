@@ -17,12 +17,14 @@
 
 #include "ai/beam_search.h"
 #include "ai/board_bitset.h"
+#include "ai/placement.h"
 #include "engine/attack.h"
 #include "engine/piece.h"
 #include "tbp/bot.h"
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -52,6 +54,16 @@ public:
   void stop() override;
   void quit() override;
 
+  // Non-TbpBot accessor: the principal variation from the most recent
+  // completed search, with front entries popped as play() is called so the
+  // span stays aligned with the current game state. Empty until the first
+  // search completes, or between the old PV being invalidated (start / new
+  // garbage) and the next one landing. TbpController downcasts to this type
+  // to render bot plans; external bots don't expose this path.
+  std::span<const Placement> last_pv() const { return last_pv_; }
+
+  std::vector<Placement> last_plan() const override { return last_pv_; }
+
 private:
   // Cancel any in-flight task and start a new one from the current state_.
   void launch_search();
@@ -68,6 +80,11 @@ private:
   // Async search.
   std::unique_ptr<BeamTask> task_;
   bool needs_restart_ = false;
+
+  // Principal variation of the last completed search. Updated on
+  // poll_suggestion() when a result lands; the front element is popped on
+  // each play() so last_pv() always describes the *upcoming* plan.
+  std::vector<Placement> last_pv_;
 };
 
 } // namespace tbp

@@ -4,6 +4,25 @@
 #include <iterator>
 
 enum class SpinKind { None, Mini, TSpin, AllSpin };
+// clang-format off
+template <>
+struct fmt::formatter<SpinKind> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const SpinKind& spin, FormatContext& ctx) const {
+        switch (spin) {
+            case SpinKind::None:   return fmt::format_to(ctx.out(), "None");
+            case SpinKind::Mini:   return fmt::format_to(ctx.out(), "Mini");
+            case SpinKind::TSpin:  return fmt::format_to(ctx.out(), "TSpin");
+            case SpinKind::AllSpin:return fmt::format_to(ctx.out(), "AllSpin");
+            default:               return fmt::format_to(ctx.out(), "Unknown");
+        }
+    }
+};
+// clang-format on
 
 struct AttackState {
   int combo = 0;

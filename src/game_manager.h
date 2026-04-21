@@ -64,5 +64,16 @@ private:
   MatchState match_state_;
   std::mt19937 gap_rng_{0xC17150};
 
+  // Debug toggles. F3 (settings_.debug_menu) shows a small floating panel.
+  bool debug_window_visible_ = false;
+  bool show_bot_plans_ = false;
+
   VersusViewModel build_versus_view_model(TimePoint now);
+  void draw_debug_window();
+  // Returns the display name for the player at idx (0 = p1, 1 = p2). For a
+  // TbpController-driven player, the bot's advertised name; otherwise
+  // "HUMAN".
+  std::string player_name(int idx) const;
+  // Forward show_bot_plans_ to every TbpController in both controller lists.
+  void propagate_show_plan();
 };

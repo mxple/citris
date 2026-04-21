@@ -1,17 +1,56 @@
 #include "tbp/external_bot.h"
 
+#include "log.h"
 #include "tbp/codec.h"
+#include "tbp/conversions.h"
 
 #include <cerrno>
-#include <chrono>
 #include <cstdio>
 #include <cstring>
+#ifndef _WIN32
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 namespace tbp {
+
+#ifdef _WIN32
+// Windows stub: external TBP bots rely on fork/exec/pipe, which don't exist on
+// Windows. Porting to CreateProcess + anonymous pipes isn't done yet, so every
+// method here is a no-op and rules() returns an Error. The class still exists
+// and links because versus.h and tbp_controller.cc reference it directly.
+
+ExternalTbpBot::ExternalTbpBot(ExternalBotConfig cfg) : cfg_(std::move(cfg)) {}
+ExternalTbpBot::~ExternalTbpBot() = default;
+
+Info ExternalTbpBot::info() const { return {}; }
+
+std::variant<Ready, Error> ExternalTbpBot::rules(const Rules &) {
+  return Error{"external TBP bots not supported on Windows"};
+}
+void ExternalTbpBot::start(const Start &) {}
+std::optional<Suggestion> ExternalTbpBot::poll_suggestion() {
+  return std::nullopt;
+}
+void ExternalTbpBot::play(const Play &) {}
+void ExternalTbpBot::new_piece(const NewPiece &) {}
+void ExternalTbpBot::request_suggestion() {}
+void ExternalTbpBot::stop() {}
+void ExternalTbpBot::quit() {}
+std::vector<Placement> ExternalTbpBot::last_plan() const { return {}; }
+
+void ExternalTbpBot::spawn() {}
+void ExternalTbpBot::reader_main() {}
+void ExternalTbpBot::write_msg(const Message &) {}
+std::optional<Message>
+ExternalTbpBot::wait_for(const std::function<bool(const Message &)> &, int) {
+  return std::nullopt;
+}
+void ExternalTbpBot::cleanup() {}
+} // namespace tbp
+#else
 
 namespace {
 
@@ -106,9 +145,21 @@ void ExternalTbpBot::reader_main() {
   std::string carry;
   read_line_loop(out_fd_, carry, [&](std::string &&line) {
     if (line.empty()) return true;
+    TBP_TRACE("< {}", line);
     auto msg = parse(line);
     if (!msg) return true; // unknown type: ignore
-    {
+
+    // Stale-suggestion guard: a Suggestion whose ordinal is <=
+    // stale_cutoff_ belongs to a pre-reset / pre-stop session and must be
+    // dropped before it pollutes the fresh inbox. See external_bot.h.
+    if (std::holds_alternative<Suggestion>(*msg)) {
+      int my_idx = suggestions_received_.fetch_add(
+                       1, std::memory_order_relaxed) +
+                   1;
+      std::lock_guard<std::mutex> lk(mu_);
+      if (my_idx <= stale_cutoff_) return true; // stale — drop silently
+      inbox_.push_back(std::move(*msg));
+    } else {
       std::lock_guard<std::mutex> lk(mu_);
       inbox_.push_back(std::move(*msg));
     }
@@ -122,6 +173,7 @@ void ExternalTbpBot::reader_main() {
 void ExternalTbpBot::write_msg(const Message &m) {
   if (in_fd_ < 0) return;
   auto line = serialize(m);
+  TBP_TRACE("> {}", line);
   line.push_back('\n');
   const char *p = line.data();
   size_t remaining = line.size();
@@ -134,6 +186,12 @@ void ExternalTbpBot::write_msg(const Message &m) {
     p += n;
     remaining -= static_cast<size_t>(n);
   }
+  // Track Suggest ordinals so the reader can tell fresh responses from
+  // pre-reset leftovers. Increment AFTER the write so a Suggest that failed
+  // to reach the child isn't counted against the cutoff (on failure we
+  // broke out of the loop and no response will come back anyway).
+  if (std::holds_alternative<Suggest>(m))
+    suggests_sent_.fetch_add(1, std::memory_order_relaxed);
 }
 
 std::optional<Message>
@@ -180,9 +238,30 @@ std::variant<Ready, Error> ExternalTbpBot::rules(const Rules &r) {
 }
 
 void ExternalTbpBot::start(const Start &s) {
+  // Per TBP spec, start() can be sent to begin a new game. If the bot was
+  // already calculating (previous game), we must end that session first with
+  // stop; some external bots treat unsolicited start as an error. Safe to
+  // send even on first call (bot should no-op on stop-when-idle).
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    // Any Suggestion whose ordinal is <= this cutoff is from the previous
+    // session and must be dropped when it lands. Snapshotting *after*
+    // write(Stop) is fine — suggests_sent_ counts writes to the wire and
+    // Stop doesn't affect it.
+    stale_cutoff_ = suggests_sent_.load(std::memory_order_relaxed);
+    for (auto it = inbox_.begin(); it != inbox_.end();) {
+      if (std::holds_alternative<Suggestion>(*it))
+        it = inbox_.erase(it);
+      else
+        ++it;
+    }
+    last_plan_moves_.clear();
+  }
   write_msg(s);
-  // The bot will start calculating; our follow-up suggest triggers the reply.
-  write_msg(Suggest{});
+  // Suggest is intentionally NOT auto-written here. TbpController emits it
+  // explicitly at the turn boundary, after new_piece(s) have been relayed,
+  // so the bot computes on the full queue rather than the one it had when
+  // start arrived.
 }
 
 std::optional<Suggestion> ExternalTbpBot::poll_suggestion() {
@@ -191,6 +270,8 @@ std::optional<Suggestion> ExternalTbpBot::poll_suggestion() {
     if (auto *s = std::get_if<Suggestion>(&*it)) {
       Suggestion sug = std::move(*s);
       inbox_.erase(it);
+      // Cache the moves list for plan-overlay rendering.
+      last_plan_moves_ = sug.moves;
       return sug;
     }
   }
@@ -199,16 +280,47 @@ std::optional<Suggestion> ExternalTbpBot::poll_suggestion() {
 
 void ExternalTbpBot::play(const Play &p) {
   write_msg(p);
-  // Request the next suggestion eagerly so the bot is always calculating
-  // between our moves.
-  write_msg(Suggest{});
+  // Advance the plan cache in lockstep: if the played piece matches the
+  // head of the cached moves list, pop the front (PV-like semantics);
+  // otherwise clear, since the remaining alternatives were for the
+  // superseded piece. Unlike a blanket clear, this leaves multi-move
+  // suggestions (PV-style external bots) still renderable, and for
+  // single-move bots it empties naturally until the next poll_suggestion
+  // lands fresh data. The controller's type-match guard protects the
+  // short window between pop and refill from rendering stale placements.
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    if (!last_plan_moves_.empty() &&
+        last_plan_moves_.front().location.type == p.move.location.type) {
+      last_plan_moves_.erase(last_plan_moves_.begin());
+    } else {
+      last_plan_moves_.clear();
+    }
+  }
+  // Suggest deferred — TbpController issues it via request_suggestion()
+  // once it has also relayed any new_piece() updates for this turn.
 }
 
 void ExternalTbpBot::new_piece(const NewPiece &n) { write_msg(n); }
 
+void ExternalTbpBot::request_suggestion() { write_msg(Suggest{}); }
+
 void ExternalTbpBot::stop() {
-  if (stopping_) return;
+  // stopping_ is reserved for quit() to prevent double-sending Quit during
+  // destruction; stop() may legitimately be called multiple times (once per
+  // reset / game-over) and must always emit a Stop message.
   write_msg(Stop{});
+  std::lock_guard<std::mutex> lk(mu_);
+  // Mirror start(): any in-flight Suggestion is from the session we're
+  // stopping and should be dropped on arrival.
+  stale_cutoff_ = suggests_sent_.load(std::memory_order_relaxed);
+  for (auto it = inbox_.begin(); it != inbox_.end();) {
+    if (std::holds_alternative<Suggestion>(*it))
+      it = inbox_.erase(it);
+    else
+      ++it;
+  }
+  last_plan_moves_.clear();
 }
 
 void ExternalTbpBot::quit() {
@@ -249,4 +361,14 @@ void ExternalTbpBot::cleanup() {
   }
 }
 
+std::vector<Placement> ExternalTbpBot::last_plan() const {
+  std::lock_guard<std::mutex> lk(mu_);
+  std::vector<Placement> out;
+  out.reserve(last_plan_moves_.size());
+  for (const auto &m : last_plan_moves_)
+    out.push_back(location_to_placement(m.location, spin_from_str(m.spin)));
+  return out;
+}
+
 } // namespace tbp
+#endif // _WIN32

@@ -60,16 +60,16 @@ public:
     return std::nullopt;
   }
 
-  void reset_input_state() override {
+  void reset() override {
     path_.clear();
     path_idx_ = 0;
     pending_placement_.reset();
   }
 
-  void notify(const EngineEvent &ev, TimePoint) override {
+  void notify(const EngineEvent &ev, TimePoint, const GameState &state) override {
     if (std::holds_alternative<eng::PieceLocked>(ev) ||
         std::holds_alternative<eng::UndoPerformed>(ev))
-      reset_input_state();
+      reset();
     if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev)) {
       if (pending_placement_)
         pending_placement_->placement.y += gm->lines;

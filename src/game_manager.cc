@@ -3,6 +3,7 @@
 #include "controller/player_controller.h"
 #include "controller/tbp_controller.h"
 #include "controller/tool_controller.h"
+#include "tbp/bot.h"
 #include "tbp/internal_bot.h"
 #include "ui/game_ui.h"
 
@@ -23,11 +24,26 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   Board board;
   mode_->setup_board(board);
   game_ = std::make_unique<Game>(*mode_, std::move(board));
-  auto ai_ctrl = std::make_unique<AIController>();
-  ai_controller_ = ai_ctrl.get();
-  controllers_.push_back(std::make_unique<PlayerController>(settings_));
-  controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_, ai_state_));
-  controllers_.push_back(std::move(ai_ctrl));
+
+  // P1 wiring depends on whether the mode declares p1 as a bot. Default
+  // (single-player + versus-with-human-p1) keeps the existing Player +
+  // Tool + AIController stack. If the mode returns a bot for p1, we swap
+  // PlayerController + AIController for a TbpController and leave the
+  // ai_state_/ai_controller_ inert (ai_state_.active stays false).
+  auto p1_bot = mode_->make_player_bot(0);
+  if (p1_bot) {
+    controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_,
+                                                              ai_state_));
+    controllers_.push_back(std::make_unique<TbpController>(
+        std::move(p1_bot), mode_->think_time_ms(0)));
+  } else {
+    auto ai_ctrl = std::make_unique<AIController>();
+    ai_controller_ = ai_ctrl.get();
+    controllers_.push_back(std::make_unique<PlayerController>(settings_));
+    controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_,
+                                                              ai_state_));
+    controllers_.push_back(std::move(ai_ctrl));
+  }
   game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
 
   auto now = SdlClock::now();
@@ -40,10 +56,13 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
     game2_ = std::make_unique<Game>(*mode2_, std::move(board2));
     mode2_->on_start(now);
     game2_->drain_events();
-    // Default opponent: Citris's own AI via an in-process TbpBot. Phase 6
-    // will add external-bot / human selection from the menu.
+    // The P1-side mode decides who drives player 2 (VersusMode routes this
+    // through its PlayerConfig). Fallback: in-process AI so a versus mode
+    // that doesn't override the hook still gets a playable opponent.
+    auto bot = mode_->make_player_bot(1);
+    if (!bot) bot = std::make_unique<tbp::InternalTbpBot>();
     controllers2_.push_back(std::make_unique<TbpController>(
-        std::make_unique<tbp::InternalTbpBot>()));
+        std::move(bot), mode_->think_time_ms(1)));
   }
 }
 
@@ -63,7 +82,7 @@ void GameManager::reset() {
   game_ = std::make_unique<Game>(*mode_, std::move(board));
 
   for (auto &ctrl : controllers_)
-    ctrl->reset_input_state();
+    ctrl->reset();
 
   auto now = SdlClock::now();
   mode_->on_start(now);
@@ -80,7 +99,7 @@ void GameManager::reset() {
     // Reset after the new game exists so TbpController's next tick re-starts
     // the bot against the fresh board.
     for (auto &ctrl : controllers2_)
-      ctrl->reset_input_state();
+      ctrl->reset();
   }
 }
 
@@ -139,6 +158,8 @@ run_start:
         } else if (kd->key == settings_.reset_game) {
           reset();
           goto run_start;
+        } else if (kd->key == settings_.debug_menu) {
+          debug_window_visible_ = !debug_window_visible_;
         }
       }
       TimePoint event_time = now;
@@ -210,6 +231,8 @@ run_start:
       ctrl->draw_imgui();
     mode_->draw_imgui();
 
+    propagate_show_plan();
+
     if (game2_) {
       VersusViewModel vvm = build_versus_view_model(now);
       draw_versus_ui(*game_renderer_, window_, vvm, settings_);
@@ -222,6 +245,8 @@ run_start:
       draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
                    ctrl_ptrs, &ai_state_, ai_controller_);
     }
+
+    draw_debug_window();
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
@@ -240,8 +265,9 @@ void GameManager::process_engine_events(TimePoint now,
   auto events = game_->drain_events();
 
   for (auto &ev : events) {
+    auto st = game_->state();
     for (auto &ctrl : controllers_)
-      ctrl->notify(ev, now);
+      ctrl->notify(ev, now, st);
 
     bool undo = stats_.process_event(ev, now);
 
@@ -252,11 +278,18 @@ void GameManager::process_engine_events(TimePoint now,
       ai_state_.on_garbage(gm->lines);
     } else if (undo) {
       for (auto &ctrl : controllers_)
-        ctrl->reset_input_state();
+        ctrl->reset();
       mode_->on_undo(game_->state());
       ai_state_.on_undo();
     }
   }
+
+  // End-of-batch hook — controllers that need to react to a completed turn
+  // as a whole (rather than per-event) run their post-notify work here on
+  // the final post-apply state.
+  auto post_state = game_->state();
+  for (auto &ctrl : controllers_)
+    ctrl->post_hook(now, post_state);
 
   mode_->on_tick(now, game_->state(), rule_cmds);
 }
@@ -286,12 +319,16 @@ void GameManager::process_p2_events(TimePoint now, CommandBuffer &rule_cmds) {
   // mode2_ react. No AIState / undo handling yet (p2 is AI-driven today).
   auto events = game2_->drain_events();
   for (auto &ev : events) {
+    auto st = game2_->state();
     for (auto &ctrl : controllers2_)
-      ctrl->notify(ev, now);
+      ctrl->notify(ev, now, st);
     stats2_.process_event(ev, now);
     if (auto *pl = std::get_if<eng::PieceLocked>(&ev))
       mode2_->on_piece_locked(*pl, game2_->state(), rule_cmds);
   }
+  auto post_state = game2_->state();
+  for (auto &ctrl : controllers2_)
+    ctrl->post_hook(now, post_state);
   mode2_->on_tick(now, game2_->state(), rule_cmds);
 }
 
@@ -321,6 +358,12 @@ ViewModel GameManager::build_view_model(TimePoint now) {
 VersusViewModel GameManager::build_versus_view_model(TimePoint now) {
   VersusViewModel vvm;
   vvm.left = build_view_model(now);
+  // Label the left board with its player's name. fill_hud on FreeplayMode
+  // leaves center_text empty, so we own this slot in versus.
+  {
+    HudData &hud = vvm.left.hud ? *vvm.left.hud : vvm.left.hud.emplace();
+    hud.center_text = player_name(0);
+  }
 
   // Build right side in-place — mirrors build_view_model but against game2_.
   ViewModel &right = vvm.right;
@@ -329,13 +372,43 @@ VersusViewModel GameManager::build_versus_view_model(TimePoint now) {
   HudData hud;
   mode2_->fill_hud(hud, right.state, now);
   hud.pending_garbage_lines = game2_->pending_garbage_lines();
-  if (!hud.center_text.empty() || !hud.game_over_label.empty() ||
-      hud.pending_garbage_lines > 0)
-    right.hud = std::move(hud);
+  hud.center_text = player_name(1);
+  right.hud = std::move(hud);
   mode2_->fill_plan_overlay(right, right.state);
   for (auto &ctrl : controllers2_)
     ctrl->fill_plan_overlay(right, right.state);
 
   vvm.match = match_state_;
   return vvm;
+}
+
+std::string GameManager::player_name(int idx) const {
+  const auto &list = idx == 0 ? controllers_ : controllers2_;
+  for (const auto &c : list) {
+    if (auto *tc = dynamic_cast<TbpController *>(c.get()))
+      return tc->bot().info().name;
+  }
+  return "HUMAN";
+}
+
+void GameManager::propagate_show_plan() {
+  auto apply = [&](const std::vector<std::unique_ptr<IController>> &list) {
+    for (auto &c : list)
+      if (auto *tc = dynamic_cast<TbpController *>(c.get()))
+        tc->set_show_plan(show_bot_plans_);
+  };
+  apply(controllers_);
+  apply(controllers2_);
+}
+
+void GameManager::draw_debug_window() {
+  if (!debug_window_visible_) return;
+  ImGui::SetNextWindowSize(ImVec2(260, 0), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
+  if (ImGui::Begin("Debug", &debug_window_visible_)) {
+    ImGui::Checkbox("Show AI plans", &show_bot_plans_);
+    ImGui::TextDisabled("Toggle: %s",
+                        SDL_GetKeyName(settings_.debug_menu));
+  }
+  ImGui::End();
 }

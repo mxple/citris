@@ -30,14 +30,8 @@ namespace {
 
 bool g_verbose = false;
 
-void log_line(const char *prefix, const std::string &s) {
-  if (!g_verbose) return;
-  std::fprintf(stderr, "[%s] %s\n", prefix, s.c_str());
-}
-
 void emit(const tbp::Message &m) {
   std::string line = tbp::serialize(m);
-  log_line("tx", line);
   std::fputs(line.c_str(), stdout);
   std::fputc('\n', stdout);
   std::fflush(stdout);
@@ -87,7 +81,6 @@ int main(int argc, char **argv) {
   std::string line;
   while (std::getline(std::cin, line)) {
     if (line.empty()) continue;
-    log_line("rx", line);
     auto parsed = tbp::parse(line);
     if (!parsed) continue; // unknown type / parse error: ignore per spec.
 

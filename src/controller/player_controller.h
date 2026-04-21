@@ -14,8 +14,8 @@ public:
   void tick(TimePoint now, const GameState &state,
             CommandBuffer &cmds) override;
   std::optional<TimePoint> next_deadline() const override;
-  void reset_input_state() override;
-  void notify(const EngineEvent &ev, TimePoint now) override;
+  void reset() override;
+  void notify(const EngineEvent &ev, TimePoint now, const GameState&) override;
 
 private:
   std::optional<GameInput> key_to_input(KeyCode key) const;

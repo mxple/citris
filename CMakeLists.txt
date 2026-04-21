@@ -112,6 +112,7 @@ file(GLOB LIB_SOURCES
 list(FILTER LIB_SOURCES EXCLUDE REGEX "(main\\.cc|main_tbp_bot\\.cc|main_headless\\.cc)$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
 target_precompile_headers(tetris_lib PUBLIC src/pch.h)
+target_compile_options(tetris_lib PUBLIC -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
 target_include_directories(tetris_lib PUBLIC
   src
   src/engine

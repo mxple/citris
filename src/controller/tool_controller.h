@@ -25,7 +25,7 @@ public:
 
   void tick(TimePoint, const GameState &, CommandBuffer &) override {}
   std::optional<TimePoint> next_deadline() const override { return std::nullopt; }
-  void reset_input_state() override {}
+  void reset() override {}
 
 private:
   KeyCode undo_key_;

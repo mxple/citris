@@ -1,11 +1,22 @@
 #include "game.h"
+#include "board_bitset.h"
+#include "log.h"
+#include "movegen.h"
 #include "presets/game_mode.h"
 #include "srs.h"
+#include <algorithm>
+#include <fmt/format.h>
 
 Game::Game(const GameMode &mode, Board board, unsigned seed)
-    : mode_(mode), board_(std::move(board)),
-      queue_(mode_.create_queue(seed)) {
+    : mode_(mode), board_(std::move(board)), queue_(mode_.create_queue(seed)) {
   now_ = SdlClock::now();
+  // Emit QueueRefill for each piece the source appends to the buffer.
+  // Fires during spawn_piece()'s peek below (initial window fill) and on
+  // every subsequent prefetch. Consumers see a monotone, in-order stream of
+  // new pieces — no absolute-index bookkeeping needed.
+  queue_.set_on_added([this](PieceType p) {
+    pending_events_.push_back(eng::QueueRefill{p});
+  });
   spawn_piece();
 }
 
@@ -70,7 +81,7 @@ GameState Game::state() const {
       .ghost_piece = compute_ghost(),
       .hold_piece = hold_piece_,
       .hold_available = hold_available_,
-      .queue = queue_.peek(16), // 16 for 6 line PC solves
+      .queue = queue_.peek(mode_.queue_visible()),
       .attack_state = attack_state_,
       .game_over = game_over_,
       .won = won_,
@@ -210,12 +221,24 @@ void Game::handle_move(const cmd::MovePiece &e) {
 }
 
 void Game::handle_place(const cmd::Place &c) {
-  // TODO: ERROR log in debug builds if placement.type != current_piece_.type
-  if (c.placement.type != current_piece_.type)
+  auto placement = c.placement.canonical();
+
+  // check legality
+  MoveBuffer m;
+  generate_moves(BoardBitset::from_board(board_), m, current_piece_.type);
+  auto it = std::find_if(m.begin(), m.end(), [&](const Placement &p) {
+    return placement.same_landing(p);
+  });
+  if (it == m.end()) {
+    LOG_WARN("Illegal placement! Tried to place {}, avail are [{},{}]",
+             placement, current_piece_.type,
+             hold_piece_.has_value() ? fmt::format("{}", *hold_piece_) : "X");
+    pending_events_.push_back(eng::IllegalPlacement{});
     return;
+  }
 
   push_snapshot();
-  current_piece_ = c.placement.to_piece();
+  current_piece_ = placement.to_piece();
   current_piece_ = compute_ghost(); // snap to ground
   last_move_was_rotation_ = false;
 
@@ -229,7 +252,7 @@ void Game::handle_place(const cmd::Place &c) {
   lines_cleared_ += cleared;
   int prev_combo = attack_state_.combo;
   int attack =
-      compute_attack_and_update_state(attack_state_, cleared, c.placement.spin);
+      compute_attack_and_update_state(attack_state_, cleared, placement.spin);
   pending_attack_ += attack;
   total_attack_ += attack;
 
@@ -239,13 +262,13 @@ void Game::handle_place(const cmd::Place &c) {
     pending_attack_ += 10;
     total_attack_ += 10;
   }
-  if (cleared > 0 || c.placement.spin != SpinKind::None) {
-    last_clear_ = {cleared, c.placement.spin, pc, piece_gen_};
+  if (cleared > 0 || placement.spin != SpinKind::None) {
+    last_clear_ = {cleared, placement.spin, pc, piece_gen_};
   }
 
   pending_events_.push_back(eng::PieceLocked{
-      locked_type, locked_rot, locked_x, locked_y, cleared, c.placement.spin,
-      pc, attack, prev_combo, attack_state_.combo, attack_state_.b2b});
+      locked_type, locked_rot, locked_x, locked_y, cleared, placement.spin, pc,
+      attack, prev_combo, attack_state_.combo, attack_state_.b2b});
 
   hold_available_ = true;
   gravity_deadline_.reset();
@@ -281,7 +304,8 @@ void Game::handle_lock_delay_expired() {
 }
 
 void Game::handle_garbage_received(int lines, int gap_col, bool immediate) {
-  if (lines <= 0) return;
+  if (lines <= 0)
+    return;
   if (immediate) {
     // Bypass the buffer entirely (used by modes like Cheese that seed
     // garbage before play starts).
@@ -294,21 +318,24 @@ void Game::handle_garbage_received(int lines, int gap_col, bool immediate) {
 }
 
 int Game::cancel_buffered_garbage(int amount) {
-  if (amount <= 0) return 0;
+  if (amount <= 0)
+    return 0;
   int cancelled = 0;
-  // FIFO: oldest attacks cancel first 
+  // FIFO: oldest attacks cancel first
   while (!pending_garbage_.empty() && cancelled < amount) {
     auto &front = pending_garbage_.back();
     int want = std::min(front.lines, amount - cancelled);
     front.lines -= want;
     cancelled += want;
-    if (front.lines == 0) pending_garbage_.pop();
+    if (front.lines == 0)
+      pending_garbage_.pop();
   }
   return cancelled;
 }
 
 void Game::materialize_buffered_garbage(int cap) {
-  if (cap <= 0 || pending_garbage_.empty()) return;
+  if (cap <= 0 || pending_garbage_.empty())
+    return;
   int materialized = 0;
   const auto delay = mode_.garbage_delay();
   // Walk FIFO front-to-back. Oldest batch first — it lands at the bottom
@@ -321,7 +348,8 @@ void Game::materialize_buffered_garbage(int cap) {
   // front isn't eligible then nothing after it is, so we can break.
   while (!pending_garbage_.empty() && materialized < cap) {
     auto &front = pending_garbage_.front();
-    if (now_ - front.arrival_time < delay) break;
+    if (now_ - front.arrival_time < delay)
+      break;
     int want = std::min(front.lines, cap - materialized);
     board_.add_garbage(want, front.gap_col);
     front.lines -= want;
@@ -371,6 +399,11 @@ void Game::spawn_piece() {
     return;
 
   pending_events_.push_back(eng::PieceSpawned{current_piece_.type});
+
+  // Refill the preview window now so any newly-exposed tail pieces emit
+  // QueueRefill events during this apply() call rather than on the next
+  // state() read (which would delay delivery to controllers by a tick).
+  queue_.peek(mode_.queue_visible());
 
   settle();
   arm_gravity();

@@ -3,6 +3,7 @@
 #include "piece.h"
 #include "piece_source.h"
 #include <deque>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <random>
@@ -68,6 +69,14 @@ public:
   Snapshot snapshot() const;
   void restore(const Snapshot &snap);
 
+  // Install a callback invoked once per piece appended to the buffer from
+  // the source (i.e. on prefetch refill). Not called by insert/replace or
+  // restore — those reshape existing buffer contents rather than draw new
+  // pieces from the source.
+  void set_on_added(std::function<void(PieceType)> cb) {
+    on_added_ = std::move(cb);
+  }
+
 private:
   // Refill from source until `buffer_.size() >= n` or source is exhausted.
   void prefetch(int n);
@@ -75,4 +84,5 @@ private:
   std::deque<PieceType> buffer_;
   std::unique_ptr<PieceSource> source_;
   int draws_ = 0;
+  std::function<void(PieceType)> on_added_;
 };
