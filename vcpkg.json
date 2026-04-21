@@ -15,6 +15,7 @@
         "docking-experimental"
       ]
     },
-    "nlohmann-json"
+    "nlohmann-json",
+    "spdlog"
   ]
 }

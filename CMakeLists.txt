@@ -34,6 +34,12 @@ if(EMSCRIPTEN)
   FetchContent_Declare(imgui_src
     URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.8.tar.gz
   )
+  FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
+  )
+  FetchContent_Declare(spdlog
+    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
+  )
 
   set(SDL_SHARED OFF CACHE BOOL "" FORCE)
   set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -41,9 +47,13 @@ if(EMSCRIPTEN)
   set(SDL3IMAGE_STATIC ON CACHE BOOL "" FORCE)
   set(SDL3IMAGE_JPG OFF CACHE BOOL "" FORCE)
   set(SDL3IMAGE_WEBP OFF CACHE BOOL "" FORCE)
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 
   FetchContent_MakeAvailable(SDL3 SDL3_image)
   FetchContent_MakeAvailable(imgui_src)
+  FetchContent_MakeAvailable(nlohmann_json)
+  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(spdlog)
 
   # Build ImGui as a static library from fetched sources
   add_library(imgui_lib STATIC
@@ -67,9 +77,9 @@ else()
   find_package(SDL3 REQUIRED)
   find_package(SDL3_image REQUIRED)
   find_package(imgui CONFIG REQUIRED)
+  find_package(nlohmann_json CONFIG REQUIRED)
+  find_package(spdlog CONFIG REQUIRED)
 endif()
-
-find_package(nlohmann_json CONFIG REQUIRED)
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -114,9 +124,11 @@ target_include_directories(tetris_lib PUBLIC
   src/tbp
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json spdlog::spdlog)
 if(NOT EMSCRIPTEN)
   target_link_libraries(tetris_lib PUBLIC Threads::Threads)
+  # libstdc++'s std::stacktrace implementation lives in libstdc++exp (GCC 14+).
+  target_link_libraries(tetris_lib PUBLIC stdc++exp)
 endif()
 add_dependencies(tetris_lib embed_font)
 

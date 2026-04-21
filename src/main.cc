@@ -1,4 +1,5 @@
 #include "game_manager.h"
+#include "log.h"
 #include "settings.h"
 #include "ui/menu.h"
 
@@ -108,6 +109,7 @@ static void setup_imgui_style() {
 }
 
 int main(int argc, char *argv[]) {
+  Log::init();
   Settings settings(argv[0]);
 
   SDL_Init(SDL_INIT_VIDEO);

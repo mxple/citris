@@ -5,11 +5,14 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <fmt/core.h>
 #include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "log.h"
 
 #include <SDL3/SDL_timer.h>
 
