@@ -137,6 +137,7 @@ private:
   int pending_attack_ = 0;
   int lines_cleared_ = 0;
   int total_attack_ = 0;
+  bool paused_ = false;
   bool game_over_ = false;
   bool won_ = false;
   bool dirty_ = true;

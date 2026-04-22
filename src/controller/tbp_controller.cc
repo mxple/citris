@@ -55,7 +55,7 @@ void TbpController::tick(TimePoint now, const GameState &state,
   }
 
   if (phase_ == Phase::Placing) [[unlikely]] {
-    LOG_WARN("Game didn't lock our last played piece?");
+    // LOG_WARN("Game didn't lock our last played piece?");
     return;
   }
 
@@ -83,7 +83,7 @@ void TbpController::tick(TimePoint now, const GameState &state,
   if (placed_type != state.current_piece.type) {
     if (!state.hold_available) [[unlikely]] {
       LOG_WARN("{}:{} Hold not available?", __FILE__, __LINE__);
-      resync(state);
+      reset();
       return;
     }
     cmds.push(cmd::MovePiece{Input::Hold});
@@ -108,15 +108,15 @@ void TbpController::notify(const EngineEvent &ev, TimePoint now, const GameState
     // A new piece entered the preview tail. Forward to the bot.
     bot_->new_piece(tbp::NewPiece{qr->piece});
   } else if (std::holds_alternative<eng::GarbageMaterialized>(ev)) {
-    // restart since board state is desynced
-    resync(state);
+    // Restart since board state is desynced
+    reset();
   } else if (std::holds_alternative<eng::UndoPerformed>(ev)) {
     // Queue, board, and hold all rewound — the bot's cached state is stale.
-    resync(state);
+    reset();
   } else if (std::holds_alternative<eng::IllegalPlacement>(ev)) {
     // restart misbehaving bot
     LOG_INFO("Misbehaving bot, resyncing");
-    resync(state);
+    reset();
   } else if (std::holds_alternative<eng::GameOver>(ev)) {
     bot_->stop();
   }
@@ -124,9 +124,13 @@ void TbpController::notify(const EngineEvent &ev, TimePoint now, const GameState
 
 void TbpController::post_hook(TimePoint now, const GameState &state) {
   (void)now;
-  (void)state;
   if (state.game_over)
     return;
+
+  if (phase_ == Phase::Cold) {
+    resync(state);
+    return;
+  }
 
   // request in post_hook giving bot ~1 frame before polling its suggestion
   if (needs_suggest_) {

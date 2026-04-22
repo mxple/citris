@@ -34,8 +34,8 @@ struct InternalBotConfig {
   std::string name = "Citris";
   std::string version = "0.1.2";
   std::string author = "mxple";
-  int beam_width = 800;
-  int max_depth = 14;
+  int beam_width = 400;
+  int max_depth = 8;
   bool sonic_only = true;
   bool extend_7bag = true;
 };

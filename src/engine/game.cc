@@ -22,7 +22,7 @@ Game::Game(const GameMode &mode, Board board, unsigned seed)
 
 void Game::apply(const CommandBuffer &cmds) {
   for (const auto &cmd : cmds) {
-    if (game_over_)
+    if (game_over_ /*|| paused_*/)
       break;
     std::visit(
         [&](auto &&c) {
@@ -234,6 +234,7 @@ void Game::handle_place(const cmd::Place &c) {
              placement, current_piece_.type,
              hold_piece_.has_value() ? fmt::format("{}", *hold_piece_) : "X");
     pending_events_.push_back(eng::IllegalPlacement{});
+    paused_ = true;
     return;
   }
 
