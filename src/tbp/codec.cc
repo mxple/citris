@@ -1,31 +1,41 @@
 #include "tbp/codec.h"
 
+#include "tbp/conversions.h"
+
 #include <nlohmann/json.hpp>
 
 #include <array>
-#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <variant>
 
+// clang-format off
 namespace tbp {
 
 namespace {
 
 using json = nlohmann::json;
 
-// --- Sub-object helpers -----------------------------------------------------
+// Pull a std::string out of a json field, or return default.
+std::string j_str(const json &j, const char *key) {
+  if (j.contains(key) && j[key].is_string())
+    return j[key].get<std::string>();
+  return {};
+}
+
+// --- Sub-object helpers ----------------------------------------------------
 
 json piece_location_to_json(const PieceLocation &l) {
-  return json{{"type", l.type},
-              {"orientation", l.orientation},
+  return json{{"type", to_wire(l.type)},
+              {"orientation", to_wire(l.orientation)},
               {"x", l.x},
               {"y", l.y}};
 }
 
 PieceLocation json_to_piece_location(const json &j) {
   PieceLocation l;
-  l.type = j.value("type", "I");
-  l.orientation = j.value("orientation", "north");
+  if (auto p = from_wire_piece(j_str(j, "type"))) l.type = *p;
+  if (auto r = from_wire_orientation(j_str(j, "orientation"))) l.orientation = *r;
   l.x = j.value("x", 0);
   l.y = j.value("y", 0);
   return l;
@@ -33,21 +43,24 @@ PieceLocation json_to_piece_location(const json &j) {
 
 json move_to_json(const Move &m) {
   return json{{"location", piece_location_to_json(m.location)},
-              {"spin", m.spin}};
+              {"spin", to_wire(m.spin)}};
 }
 
 Move json_to_move(const json &j) {
   Move m;
-  if (j.contains("location"))
+  std::string piece_letter;
+  if (j.contains("location")) {
     m.location = json_to_piece_location(j["location"]);
-  m.spin = j.value("spin", "none");
+    piece_letter = j_str(j["location"], "type");
+  }
+  m.spin = from_wire_spin(j_str(j, "spin"), piece_letter);
   return m;
 }
 
 json move_info_to_json(const MoveInfo &mi) {
   json j = json::object();
   if (mi.nodes) j["nodes"] = *mi.nodes;
-  if (mi.nps) j["nps"] = *mi.nps;
+  if (mi.nps)   j["nps"]   = *mi.nps;
   if (mi.depth) j["depth"] = *mi.depth;
   if (mi.extra) j["extra"] = *mi.extra;
   return j;
@@ -70,11 +83,11 @@ json board_to_json(const Board &b) {
   json arr = json::array();
   for (const auto &row : b) {
     json row_arr = json::array();
-    for (const auto &cell : row) {
-      if (cell)
-        row_arr.push_back(*cell);
-      else
+    for (CellColor cell : row) {
+      if (cell == CellColor::Empty)
         row_arr.push_back(nullptr);
+      else
+        row_arr.push_back(to_wire(cell));
     }
     arr.push_back(std::move(row_arr));
   }
@@ -88,32 +101,35 @@ Board json_to_board(const json &j) {
     if (!j[y].is_array()) continue;
     for (size_t x = 0; x < j[y].size() && x < 10; ++x) {
       if (j[y][x].is_string())
-        b[y][x] = j[y][x].get<std::string>();
-      // null or anything else: leave empty
+        b[y][x] = from_wire_cell(j[y][x].get<std::string>());
+      // null or anything else: leave Empty
     }
   }
   return b;
 }
-
-constexpr std::array<const char *, 7> kPieceLetters = {"I", "O", "T", "S", "Z",
-                                                       "J", "L"};
 
 json randomizer_state_to_json(const RandomizerState &r) {
   return std::visit(
       [](const auto &v) -> json {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, UniformRandomizer>) {
-          return json{{"type", "uniform"}};
+          return json{{"type", to_wire(Randomizer::Uniform)}};
         } else if constexpr (std::is_same_v<T, SevenBagRandomizer>) {
-          return json{{"type", "seven_bag"}, {"bag_state", v.bag_state}};
+          json bag = json::array();
+          for (auto p : v.bag_state) bag.push_back(to_wire(p));
+          return json{{"type", to_wire(Randomizer::SevenBag)},
+                      {"bag_state", bag}};
         } else { // GeneralBagRandomizer
           json cur = json::object();
           json fil = json::object();
           for (int i = 0; i < 7; ++i) {
-            cur[kPieceLetters[i]] = v.current_bag[i];
-            fil[kPieceLetters[i]] = v.filled_bag[i];
+            // json object keys are std::string; string_view won't implicitly
+            // convert on older nlohmann versions, so materialize here.
+            std::string key{to_wire(static_cast<PieceType>(i))};
+            cur[key] = v.current_bag[i];
+            fil[key] = v.filled_bag[i];
           }
-          return json{{"type", "general_bag"},
+          return json{{"type", to_wire(Randomizer::GeneralBag)},
                       {"current_bag", cur},
                       {"filled_bag", fil}};
         }
@@ -123,39 +139,45 @@ json randomizer_state_to_json(const RandomizerState &r) {
 
 std::optional<RandomizerState> json_to_randomizer_state(const json &j) {
   if (!j.is_object()) return std::nullopt;
-  auto type = j.value("type", "");
-  if (type == "uniform") return RandomizerState{UniformRandomizer{}};
-  if (type == "seven_bag") {
+  auto kind = from_wire_randomizer(j_str(j, "type"));
+  if (kind == Randomizer::Uniform)
+    return RandomizerState{UniformRandomizer{}};
+  if (kind == Randomizer::SevenBag) {
     SevenBagRandomizer s;
     if (j.contains("bag_state") && j["bag_state"].is_array())
       for (auto &p : j["bag_state"])
-        if (p.is_string()) s.bag_state.push_back(p.get<std::string>());
+        if (p.is_string())
+          if (auto pt = from_wire_piece(p.get<std::string>()))
+            s.bag_state.push_back(*pt);
     return RandomizerState{std::move(s)};
   }
-  if (type == "general_bag") {
+  if (kind == Randomizer::GeneralBag) {
     GeneralBagRandomizer g;
     auto load = [](const json &obj, std::array<int, 7> &out) {
       if (!obj.is_object()) return;
       for (int i = 0; i < 7; ++i) {
-        if (obj.contains(kPieceLetters[i]) && obj[kPieceLetters[i]].is_number())
-          out[i] = obj[kPieceLetters[i]].get<int>();
+        std::string key{to_wire(static_cast<PieceType>(i))};
+        if (obj.contains(key) && obj[key].is_number())
+          out[i] = obj[key].get<int>();
       }
     };
     if (j.contains("current_bag")) load(j["current_bag"], g.current_bag);
-    if (j.contains("filled_bag")) load(j["filled_bag"], g.filled_bag);
+    if (j.contains("filled_bag"))  load(j["filled_bag"],  g.filled_bag);
     return RandomizerState{std::move(g)};
   }
   return std::nullopt;
 }
 
-// --- Message encoders -------------------------------------------------------
+// --- Message encoders ------------------------------------------------------
 
 json info_to_json(const Info &i) {
-  return json{{"type", "info"}, {"name", i.name}, {"version", i.version},
-              {"author", i.author}, {"features", i.features}};
+  return json{{"type", "info"},     {"name", i.name},
+              {"version", i.version}, {"author", i.author},
+              {"features", i.features}};
 }
 
 json ready_to_json(const Ready &) { return json{{"type", "ready"}}; }
+
 json error_to_json(const Error &e) {
   return json{{"type", "error"}, {"reason", e.reason}};
 }
@@ -170,48 +192,49 @@ json suggestion_to_json(const Suggestion &s) {
 
 json rules_to_json(const Rules &r) {
   json out{{"type", "rules"}};
-  if (r.randomizer) out["randomizer"] = *r.randomizer;
+  if (r.randomizer) out["randomizer"] = to_wire(*r.randomizer);
   return out;
 }
 
 json start_to_json(const Start &s) {
+  json queue = json::array();
+  for (auto p : s.queue) queue.push_back(to_wire(p));
+
   json out{{"type", "start"},
-           {"queue", s.queue},
+           {"queue", queue},
            {"combo", s.combo},
            {"back_to_back", s.back_to_back},
            {"board", board_to_json(s.board)}};
-  if (s.hold) out["hold"] = *s.hold;
-  else out["hold"] = nullptr;
+  if (s.hold) out["hold"] = to_wire(*s.hold);
+  else        out["hold"] = nullptr;
   if (s.randomizer) out["randomizer"] = randomizer_state_to_json(*s.randomizer);
   return out;
 }
 
-json stop_to_json(const Stop &) { return json{{"type", "stop"}}; }
+json stop_to_json(const Stop &)       { return json{{"type", "stop"}}; }
 json suggest_to_json(const Suggest &) { return json{{"type", "suggest"}}; }
 json play_to_json(const Play &p) {
   return json{{"type", "play"}, {"move", move_to_json(p.move)}};
 }
 json new_piece_to_json(const NewPiece &n) {
-  return json{{"type", "new_piece"}, {"piece", n.piece}};
+  return json{{"type", "new_piece"}, {"piece", to_wire(n.piece)}};
 }
 json quit_to_json(const Quit &) { return json{{"type", "quit"}}; }
 
-// --- Message decoders -------------------------------------------------------
+// --- Message decoders ------------------------------------------------------
 
 Info decode_info(const json &j) {
   Info i;
-  i.name = j.value("name", "");
+  i.name    = j.value("name", "");
   i.version = j.value("version", "");
-  i.author = j.value("author", "");
+  i.author  = j.value("author", "");
   if (j.contains("features") && j["features"].is_array())
     for (auto &f : j["features"])
       if (f.is_string()) i.features.push_back(f.get<std::string>());
   return i;
 }
 
-Error decode_error(const json &j) {
-  return Error{j.value("reason", "")};
-}
+Error decode_error(const json &j) { return Error{j.value("reason", "")}; }
 
 Suggestion decode_suggestion(const json &j) {
   Suggestion s;
@@ -225,17 +248,19 @@ Suggestion decode_suggestion(const json &j) {
 Rules decode_rules(const json &j) {
   Rules r;
   if (j.contains("randomizer") && j["randomizer"].is_string())
-    r.randomizer = j["randomizer"].get<std::string>();
+    r.randomizer = from_wire_randomizer(j["randomizer"].get<std::string>());
   return r;
 }
 
 Start decode_start(const json &j) {
   Start s;
   if (j.contains("hold") && j["hold"].is_string())
-    s.hold = j["hold"].get<std::string>();
+    if (auto p = from_wire_piece(j["hold"].get<std::string>())) s.hold = *p;
   if (j.contains("queue") && j["queue"].is_array())
     for (auto &p : j["queue"])
-      if (p.is_string()) s.queue.push_back(p.get<std::string>());
+      if (p.is_string())
+        if (auto pt = from_wire_piece(p.get<std::string>()))
+          s.queue.push_back(*pt);
   s.combo = j.value("combo", 0);
   s.back_to_back = j.value("back_to_back", false);
   if (j.contains("board")) s.board = json_to_board(j["board"]);
@@ -251,12 +276,14 @@ Play decode_play(const json &j) {
 }
 
 NewPiece decode_new_piece(const json &j) {
-  return NewPiece{j.value("piece", "")};
+  NewPiece n{};
+  if (auto p = from_wire_piece(j_str(j, "piece"))) n.piece = *p;
+  return n;
 }
 
 } // namespace
 
-// --- Public API -------------------------------------------------------------
+// --- Public API ------------------------------------------------------------
 
 std::string serialize(const Message &m) {
   json j = std::visit(
@@ -289,17 +316,17 @@ std::optional<Message> parse(std::string_view text) {
   if (!j.is_object() || !j.contains("type") || !j["type"].is_string())
     return std::nullopt;
   const std::string type = j["type"].get<std::string>();
-  if (type == "info") return Message{decode_info(j)};
-  if (type == "ready") return Message{Ready{}};
-  if (type == "error") return Message{decode_error(j)};
+  if (type == "info")       return Message{decode_info(j)};
+  if (type == "ready")      return Message{Ready{}};
+  if (type == "error")      return Message{decode_error(j)};
   if (type == "suggestion") return Message{decode_suggestion(j)};
-  if (type == "rules") return Message{decode_rules(j)};
-  if (type == "start") return Message{decode_start(j)};
-  if (type == "stop") return Message{Stop{}};
-  if (type == "suggest") return Message{Suggest{}};
-  if (type == "play") return Message{decode_play(j)};
-  if (type == "new_piece") return Message{decode_new_piece(j)};
-  if (type == "quit") return Message{Quit{}};
+  if (type == "rules")      return Message{decode_rules(j)};
+  if (type == "start")      return Message{decode_start(j)};
+  if (type == "stop")       return Message{Stop{}};
+  if (type == "suggest")    return Message{Suggest{}};
+  if (type == "play")       return Message{decode_play(j)};
+  if (type == "new_piece")  return Message{decode_new_piece(j)};
+  if (type == "quit")       return Message{Quit{}};
   return std::nullopt; // unknown type: per spec, ignore
 }
 

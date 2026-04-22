@@ -1,10 +1,14 @@
 #include "tbp/conversions.h"
 
+// clang-format off
 namespace tbp {
 
-// --- Piece type strings -----------------------------------------------------
+// --- Encode -----------------------------------------------------------------
+//
+// Switch with no default on purpose: adding an enum case trips -Wswitch so
+// both directions are updated together.
 
-const char *piece_type_to_str(PieceType t) {
+std::string_view to_wire(PieceType t) {
   switch (t) {
   case PieceType::I: return "I";
   case PieceType::O: return "O";
@@ -14,10 +18,57 @@ const char *piece_type_to_str(PieceType t) {
   case PieceType::J: return "J";
   case PieceType::L: return "L";
   }
-  return "?";
+  return "I";
 }
 
-std::optional<PieceType> piece_type_from_str(std::string_view s) {
+std::string_view to_wire(Rotation r) {
+  switch (r) {
+  case Rotation::North: return "north";
+  case Rotation::East:  return "east";
+  case Rotation::South: return "south";
+  case Rotation::West:  return "west";
+  }
+  return "north";
+}
+
+std::string_view to_wire(SpinKind s) {
+  switch (s) {
+  case SpinKind::None:    return "none";
+  case SpinKind::Mini:    return "mini";
+  case SpinKind::TSpin:   return "full";
+  case SpinKind::AllSpin: return "full";
+  }
+  return "none";
+}
+
+std::string_view to_wire(CellColor c) {
+  switch (c) {
+  case CellColor::Empty:   return "";
+  case CellColor::I:       return "I";
+  case CellColor::O:       return "O";
+  case CellColor::T:       return "T";
+  case CellColor::S:       return "S";
+  case CellColor::Z:       return "Z";
+  case CellColor::J:       return "J";
+  case CellColor::L:       return "L";
+  case CellColor::Garbage: return "G";
+  }
+  return "";
+}
+
+std::string_view to_wire(Randomizer r) {
+  switch (r) {
+  case Randomizer::Unknown:    return "unknown";
+  case Randomizer::Uniform:    return "uniform";
+  case Randomizer::SevenBag:   return "seven_bag";
+  case Randomizer::GeneralBag: return "general_bag";
+  }
+  return "unknown";
+}
+
+// --- Decode -----------------------------------------------------------------
+
+std::optional<PieceType> from_wire_piece(std::string_view s) {
   if (s.size() != 1) return std::nullopt;
   switch (s[0]) {
   case 'I': return PieceType::I;
@@ -31,19 +82,7 @@ std::optional<PieceType> piece_type_from_str(std::string_view s) {
   }
 }
 
-// --- Rotation strings -------------------------------------------------------
-
-const char *rotation_to_str(Rotation r) {
-  switch (r) {
-  case Rotation::North: return "north";
-  case Rotation::East:  return "east";
-  case Rotation::South: return "south";
-  case Rotation::West:  return "west";
-  }
-  return "north";
-}
-
-std::optional<Rotation> rotation_from_str(std::string_view s) {
+std::optional<Rotation> from_wire_orientation(std::string_view s) {
   if (s == "north") return Rotation::North;
   if (s == "east")  return Rotation::East;
   if (s == "south") return Rotation::South;
@@ -51,25 +90,30 @@ std::optional<Rotation> rotation_from_str(std::string_view s) {
   return std::nullopt;
 }
 
-// --- Spin strings -----------------------------------------------------------
-
-const char *spin_to_str(SpinKind s) {
-  switch (s) {
-  case SpinKind::None:    return "none";
-  case SpinKind::Mini:    return "mini";
-  case SpinKind::TSpin:   return "full";
-  case SpinKind::AllSpin: return "full";
-  }
-  return "none";
-}
-
-SpinKind spin_from_str(std::string_view s) {
+SpinKind from_wire_spin(std::string_view s, std::string_view piece) {
   if (s == "mini") return SpinKind::Mini;
-  if (s == "full") return SpinKind::AllSpin; // we lose AllSpin distinction here
+  if (s == "full") {
+    auto p = from_wire_piece(piece);
+    if (p && *p == PieceType::T)  return SpinKind::TSpin;
+    else                          return SpinKind::AllSpin;
+  }
   return SpinKind::None;
 }
 
-// --- Placement <-> PieceLocation (per-(piece, rotation) center offset) ------
+CellColor from_wire_cell(std::string_view s) {
+  if (s == "G") return CellColor::Garbage;
+  if (auto pt = from_wire_piece(s)) return piece_to_cell_color(*pt);
+  return CellColor::Empty;
+}
+
+Randomizer from_wire_randomizer(std::string_view s) {
+  if (s == "uniform")     return Randomizer::Uniform;
+  if (s == "seven_bag")   return Randomizer::SevenBag;
+  if (s == "general_bag") return Randomizer::GeneralBag;
+  return Randomizer::Unknown;
+}
+
+// --- Placement <-> PieceLocation (per-(piece, rotation) center offset) ----
 //
 // Offsets from Citris bounding-box bottom-left to TBP SRS true-rotation
 // center mino. Verified against the spec (references/tbp-spec/text/0000-mvp.md
@@ -114,60 +158,36 @@ CenterOffset center_offset(PieceType t, Rotation r) {
 PieceLocation placement_to_location(const Placement &p) {
   auto off = center_offset(p.type, p.rotation);
   return PieceLocation{
-      .type = piece_type_to_str(p.type),
-      .orientation = rotation_to_str(p.rotation),
+      .type = p.type,
+      .orientation = p.rotation,
       .x = static_cast<int>(p.x) + off.dx,
       .y = static_cast<int>(p.y) + off.dy,
   };
 }
 
 Placement location_to_placement(const PieceLocation &loc, SpinKind spin) {
-  auto type = piece_type_from_str(loc.type).value_or(PieceType::I);
-  auto rot = rotation_from_str(loc.orientation).value_or(Rotation::North);
-  auto off = center_offset(type, rot);
-  if (type == PieceType::T && spin == SpinKind::AllSpin) 
+  auto off = center_offset(loc.type, loc.orientation);
+  // "full" decodes to AllSpin by default; promote to TSpin on the T piece
+  // so downstream attack/scoring treats it correctly.
+  if (loc.type == PieceType::T && spin == SpinKind::AllSpin)
     spin = SpinKind::TSpin;
   return Placement{
-      .type = type,
-      .rotation = rot,
+      .type = loc.type,
+      .rotation = loc.orientation,
       .x = static_cast<int8_t>(loc.x - off.dx),
       .y = static_cast<int8_t>(loc.y - off.dy),
       .spin = spin,
   };
 }
 
-// --- Board cell color -------------------------------------------------------
-
-Cell cell_color_to_tbp(CellColor c) {
-  switch (c) {
-  case CellColor::Empty:   return std::nullopt;
-  case CellColor::I:       return std::string("I");
-  case CellColor::O:       return std::string("O");
-  case CellColor::T:       return std::string("T");
-  case CellColor::S:       return std::string("S");
-  case CellColor::Z:       return std::string("Z");
-  case CellColor::J:       return std::string("J");
-  case CellColor::L:       return std::string("L");
-  case CellColor::Garbage: return std::string("G");
-  }
-  return std::nullopt;
-}
-
-CellColor tbp_cell_to_color(const Cell &c) {
-  if (!c) return CellColor::Empty;
-  if (*c == "G") return CellColor::Garbage;
-  auto pt = piece_type_from_str(*c);
-  if (!pt) return CellColor::Garbage; // unknown -> opaque
-  return piece_to_cell_color(*pt);
-}
-
 // --- Board <-> TBP board ----------------------------------------------------
+// Both sides carry CellColor, so conversion is a straight copy.
 
 Board board_to_tbp(const ::Board &b) {
   Board out{};
   for (int y = 0; y < ::Board::kTotalHeight && y < 40; ++y)
     for (int x = 0; x < ::Board::kWidth; ++x)
-      out[y][x] = cell_color_to_tbp(b.cell_color(x, y));
+      out[y][x] = b.cell_color(x, y);
   return out;
 }
 
@@ -175,7 +195,7 @@ Board board_to_tbp(const ::Board &b) {
   ::Board out;
   for (int y = 0; y < ::Board::kTotalHeight && y < 40; ++y)
     for (int x = 0; x < ::Board::kWidth; ++x)
-      out.set_cell(x, y, tbp_cell_to_color(b[y][x]));
+      out.set_cell(x, y, b[y][x]);
   return out;
 }
 
@@ -183,31 +203,13 @@ BoardBitset tbp_to_bitset(const Board &b) {
   BoardBitset bb;
   for (int y = 0; y < BoardBitset::kHeight && y < 40; ++y) {
     for (int x = 0; x < BoardBitset::kWidth; ++x) {
-      if (b[y][x].has_value()) {
+      if (b[y][x] != CellColor::Empty) {
         bb.rows[y] |= uint16_t(1) << x;
         bb.cols[x] |= uint64_t(1) << y;
       }
     }
   }
   return bb;
-}
-
-// --- Queue ------------------------------------------------------------------
-
-std::vector<std::string> queue_to_tbp(const std::vector<PieceType> &q) {
-  std::vector<std::string> out;
-  out.reserve(q.size());
-  for (auto t : q) out.emplace_back(piece_type_to_str(t));
-  return out;
-}
-
-std::vector<PieceType> tbp_to_queue(const std::vector<std::string> &q) {
-  std::vector<PieceType> out;
-  out.reserve(q.size());
-  for (auto &s : q) {
-    if (auto p = piece_type_from_str(s)) out.push_back(*p);
-  }
-  return out;
 }
 
 } // namespace tbp

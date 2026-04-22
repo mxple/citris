@@ -1,9 +1,20 @@
 #pragma once
 
-// Bidirectional conversions between Citris internals and TBP wire types.
-// JSON does not appear here — it lives in codec.{h,cc}. This file deals only
-// with translating between Citris's PieceType/Rotation/Placement/Board and
-// TBP's strings/arrays/PieceLocation.
+// Bidirectional translation between Citris internals and TBP wire domains.
+//
+// For each enumerated wire domain (piece letter, orientation, spin, cell,
+// randomizer tag):
+//
+//   to_wire(enum)           -> std::string_view  (zero-alloc lookup)
+//   from_wire_*(string_view) -> enum / optional<enum>
+//
+// Both directions are implemented as switch/if-chains in conversions.cc so
+// -Wswitch catches an unhandled enum value at compile time, and the wire
+// spellings for in/out are adjacent in source and hard to desync.
+//
+// Structural converters (placement <-> location, board copies, bitset) do
+// more than an enum lookup and stay as their own functions. JSON appears
+// only in codec.{h,cc}.
 
 #include "ai/board_bitset.h"
 #include "ai/placement.h"
@@ -13,60 +24,54 @@
 #include "tbp/types.h"
 
 #include <optional>
-#include <string>
 #include <string_view>
 
 namespace tbp {
 
-// ---- Piece type ↔ TBP string -----------------------------------------------
+// ---- Encode: enum -> wire string_view -------------------------------------
 
-// "I"|"O"|"T"|"S"|"Z"|"J"|"L"
-const char *piece_type_to_str(PieceType t);
-std::optional<PieceType> piece_type_from_str(std::string_view s);
+std::string_view to_wire(PieceType t);
+std::string_view to_wire(Rotation r);
+// TSpin and AllSpin both map to "full"; TBP does not distinguish them.
+std::string_view to_wire(SpinKind s);
+// CellColor::Empty maps to "" — codec callers should emit JSON null for
+// empty cells instead of writing the empty string. The mapping exists so
+// exhaustiveness stays compiler-checked.
+std::string_view to_wire(CellColor c);
+std::string_view to_wire(Randomizer r);
 
-// ---- Rotation ↔ TBP orientation string -------------------------------------
+// ---- Decode: wire string_view -> enum -------------------------------------
 
-const char *rotation_to_str(Rotation r);
-std::optional<Rotation> rotation_from_str(std::string_view s);
+std::optional<PieceType> from_wire_piece(std::string_view s);
+std::optional<Rotation> from_wire_orientation(std::string_view s);
 
-// ---- SpinKind ↔ TBP spin string --------------------------------------------
+// "full" is ambiguous between TSpin and AllSpin on the wire; the piece
+// letter disambiguates (T-piece + "full" => TSpin, else AllSpin).
+SpinKind from_wire_spin(std::string_view s, std::string_view piece);
 
-// SRS spin kinds:
-//   None      -> "none"
-//   Mini      -> "mini"
-//   TSpin     -> "full"
-//   AllSpin   -> "full"   (TBP's spec only distinguishes none/mini/full)
-const char *spin_to_str(SpinKind s);
-SpinKind spin_from_str(std::string_view s);
+// Unrecognized strings decode to Empty — the safest fallback is to treat
+// the cell as unfilled rather than block a live mino.
+CellColor from_wire_cell(std::string_view s);
 
-// ---- Placement ↔ TBP PieceLocation -----------------------------------------
+// Unrecognized / missing -> Unknown, per 0001 spec guidance.
+Randomizer from_wire_randomizer(std::string_view s);
 
+// ---- Placement <-> PieceLocation ------------------------------------------
+//
 // Citris stores a Placement as the bounding-box bottom-left (x,y). TBP uses
 // the SRS true-rotation center mino, which is per-(piece, rotation). The
-// table below is the offset from BB-bottom-left to the center mino.
-PieceLocation placement_to_location(const Placement &p);
+// math lives in conversions.cc.
 
-// Inverse: TBP location -> Placement (without spin info — set spin separately
-// from the surrounding TbpMove if needed).
+PieceLocation placement_to_location(const Placement &p);
 Placement location_to_placement(const PieceLocation &loc, SpinKind spin);
 
-// ---- Board cell color ↔ TBP cell ------------------------------------------
-
-Cell cell_color_to_tbp(CellColor c);
-CellColor tbp_cell_to_color(const Cell &c);
-
-// ---- Board ↔ TBP board -----------------------------------------------------
+// ---- Board <-> TBP board (both carry CellColor, conversion is a re-pack) --
 
 Board board_to_tbp(const ::Board &b);
 ::Board tbp_to_board(const Board &b);
 BoardBitset tbp_to_bitset(const Board &b);
 
-// ---- Queue (vector<string> ↔ vector<PieceType>) ----------------------------
-
-std::vector<std::string> queue_to_tbp(const std::vector<PieceType> &q);
-std::vector<PieceType> tbp_to_queue(const std::vector<std::string> &q);
-
-// ---- AttackState helpers (combo/b2b come straight across the wire as ints/bool) ---
+// ---- Misc -----------------------------------------------------------------
 
 inline AttackState make_attack_state(int combo, bool b2b) {
   return AttackState{combo, b2b ? 1 : 0};

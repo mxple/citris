@@ -366,7 +366,7 @@ std::vector<Placement> ExternalTbpBot::last_plan() const {
   std::vector<Placement> out;
   out.reserve(last_plan_moves_.size());
   for (const auto &m : last_plan_moves_)
-    out.push_back(location_to_placement(m.location, spin_from_str(m.spin)));
+    out.push_back(location_to_placement(m.location, m.spin));
   return out;
 }
 

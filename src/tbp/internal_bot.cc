@@ -31,11 +31,8 @@ std::variant<Ready, Error> InternalTbpBot::rules(const Rules &) {
 
 void InternalTbpBot::start(const Start &s) {
   board_ = tbp_to_bitset(s.board);
-  queue_ = tbp_to_queue(s.queue);
-  hold_.reset();
-  if (s.hold) {
-    if (auto p = piece_type_from_str(*s.hold)) hold_ = p;
-  }
+  queue_ = s.queue;
+  hold_ = s.hold;
   hold_available_ = true;
   attack_ = make_attack_state(s.combo, s.back_to_back);
   // Previous game's PV is meaningless against a fresh position.
@@ -64,7 +61,7 @@ std::optional<Suggestion> InternalTbpBot::poll_suggestion() {
   if (!last_pv_.empty()) {
     Move m;
     m.location = placement_to_location(last_pv_.front());
-    m.spin = spin_to_str(last_pv_.front().spin);
+    m.spin = last_pv_.front().spin;
     sug.moves.push_back(std::move(m));
   }
   // Optional move_info for diagnostics.
@@ -88,14 +85,10 @@ void InternalTbpBot::play(const Play &p) {
     return;
   }
 
-  auto placed = piece_type_from_str(p.move.location.type);
-  if (!placed) {
-    needs_restart_ = true;
-    return;
-  }
+  PieceType placed = p.move.location.type;
 
   // Hold inference (per TBP spec — see internal_bot.h docstring).
-  bool used_hold = (*placed != queue_.front());
+  bool used_hold = (placed != queue_.front());
   if (used_hold) {
     if (hold_) {
       // Swap: old current -> hold, played piece is old hold.
@@ -117,7 +110,7 @@ void InternalTbpBot::play(const Play &p) {
   }
 
   // Place the piece on the board (final position from the suggestion).
-  Placement plc = location_to_placement(p.move.location, spin_from_str(p.move.spin));
+  Placement plc = location_to_placement(p.move.location, p.move.spin);
   board_.place(plc.type, plc.rotation, plc.x, plc.y);
   int cleared = board_.clear_lines();
   (void)compute_attack_and_update_state(attack_, cleared, plc.spin);
@@ -136,7 +129,7 @@ void InternalTbpBot::play(const Play &p) {
 }
 
 void InternalTbpBot::new_piece(const NewPiece &n) {
-  if (auto p = piece_type_from_str(n.piece)) queue_.push_back(*p);
+  queue_.push_back(n.piece);
   needs_restart_ = true;
 }
 

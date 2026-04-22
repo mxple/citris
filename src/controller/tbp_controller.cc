@@ -77,15 +77,10 @@ void TbpController::tick(TimePoint now, const GameState &state,
   pending_sug_.reset();
 
   const auto &move = sug->moves.front();
-  auto placed_type = tbp::piece_type_from_str(move.location.type);
-  if (!placed_type) [[unlikely]] {
-    LOG_ERROR("placed_type invalid, bad message?");
-    resync(state);
-    return;
-  }
+  PieceType placed_type = move.location.type;
 
   // Hold inference
-  if (*placed_type != state.current_piece.type) {
+  if (placed_type != state.current_piece.type) {
     if (!state.hold_available) [[unlikely]] {
       LOG_WARN("{}:{} Hold not available?", __FILE__, __LINE__);
       resync(state);
@@ -94,8 +89,7 @@ void TbpController::tick(TimePoint now, const GameState &state,
     cmds.push(cmd::MovePiece{Input::Hold});
   }
 
-  Placement p =
-      tbp::location_to_placement(move.location, tbp::spin_from_str(move.spin));
+  Placement p = tbp::location_to_placement(move.location, move.spin);
   cmds.push(cmd::Place{p});
   phase_ = Phase::Placing;
   last_placement_time_ = now;
@@ -108,12 +102,11 @@ void TbpController::notify(const EngineEvent &ev, TimePoint now, const GameState
     Placement placed{pl->type, pl->rotation, pl->x, pl->y, pl->spin};
     tbp::Move m;
     m.location = tbp::placement_to_location(placed);
-    m.spin = tbp::spin_to_str(pl->spin);
+    m.spin = pl->spin;
     bot_->play(tbp::Play{m});
   } else if (auto *qr = std::get_if<eng::QueueRefill>(&ev)) {
     // A new piece entered the preview tail. Forward to the bot.
-    bot_->new_piece(
-        tbp::NewPiece{std::string(tbp::piece_type_to_str(qr->piece))});
+    bot_->new_piece(tbp::NewPiece{qr->piece});
   } else if (std::holds_alternative<eng::GarbageMaterialized>(ev)) {
     // restart since board state is desynced
     resync(state);
@@ -183,11 +176,10 @@ void TbpController::resync(const GameState &state) {
   tbp::Start s;
   // TBP queue[0] = current piece in play; Citris tracks current separately.
   s.queue.reserve(state.queue.size() + 1);
-  s.queue.push_back(tbp::piece_type_to_str(state.current_piece.type));
+  s.queue.push_back(state.current_piece.type);
   for (auto p : state.queue)
-    s.queue.push_back(tbp::piece_type_to_str(p));
-  if (state.hold_piece)
-    s.hold = std::string(tbp::piece_type_to_str(*state.hold_piece));
+    s.queue.push_back(p);
+  s.hold = state.hold_piece;
   s.combo = state.attack_state.combo;
   s.back_to_back = state.attack_state.b2b > 0;
   s.board = tbp::board_to_tbp(state.board);
