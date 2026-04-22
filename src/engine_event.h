@@ -6,6 +6,8 @@
 #include <optional>
 #include <variant>
 
+// These are events the engine emits after applying input and timer events
+
 namespace eng {
 struct PieceLocked {
   PieceType type;

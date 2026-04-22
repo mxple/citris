@@ -3,7 +3,6 @@
 #include "engine/game_state.h"
 #include "engine/piece.h"
 #include "match.h"
-#include "sdl_types.h"
 #include "stats.h"
 #include "vec2.h"
 #include <array>

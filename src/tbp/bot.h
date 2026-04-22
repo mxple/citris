@@ -48,9 +48,7 @@ public:
 
   // Ask the bot for its current best move. For external bots this emits a
   // TBP Suggest message over the wire; for in-process bots it's typically a
-  // no-op (they're always calculating). Decoupling this from play() lets the
-  // controller issue Suggest *after* relaying new_piece() updates, so the
-  // bot searches on the full queue rather than a stale prefix.
+  // no-op (they're always calculating). 
   virtual void request_suggestion() {}
 
   // Pause calculation but stay alive (next start() may begin a new game).

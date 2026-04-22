@@ -230,16 +230,16 @@ else()
     target_link_libraries(${test_name} PRIVATE tetris_lib)
   endforeach()
 
-  # citris-tbp-bot — standalone TBP bot executable. No SDL/ImGui linkage
+  # citris-tbp — standalone TBP bot executable. No SDL/ImGui linkage
   # needed at runtime (it just uses tetris_lib which happens to also link
   # SDL, but nothing TBP-related calls in).
-  add_executable(citris-tbp-bot src/main_tbp_bot.cc)
-  target_link_libraries(citris-tbp-bot PRIVATE tetris_lib)
+  add_executable(citris-tbp src/main_tbp_bot.cc)
+  target_link_libraries(citris-tbp PRIVATE tetris_lib)
 
-  # test_tbp_external_bot spawns citris-tbp-bot; ensure it exists before the
+  # test_tbp_external_bot spawns citris-tbp; ensure it exists before the
   # test binary is run. (The test glob above already created the test target.)
   if(TARGET test_tbp_external_bot)
-    add_dependencies(test_tbp_external_bot citris-tbp-bot)
+    add_dependencies(test_tbp_external_bot citris-tbp)
   endif()
 
   # citris-headless — AI-vs-AI match runner. Shares the TbpBot / TbpController
@@ -247,8 +247,8 @@ else()
   # summary. Foundation for future SPRT tooling.
   add_executable(citris-headless src/main_headless.cc)
   target_link_libraries(citris-headless PRIVATE tetris_lib)
-  # Convenience: if the user points --bot2 at ./build/citris-tbp-bot, having
+  # Convenience: if the user points --bot2 at ./build/citris-tbp, having
   # that target already built makes the dogfood case work after a single
   # `cmake --build` invocation.
-  add_dependencies(citris-headless citris-tbp-bot)
+  add_dependencies(citris-headless citris-tbp)
 endif()

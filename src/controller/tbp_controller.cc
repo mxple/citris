@@ -115,7 +115,7 @@ void TbpController::notify(const EngineEvent &ev, TimePoint now, const GameState
     reset();
   } else if (std::holds_alternative<eng::IllegalPlacement>(ev)) {
     // restart misbehaving bot
-    LOG_INFO("Misbehaving bot, resyncing");
+    LOG_INFO("Bot [{}] is misbehaving, resyncing", bot_->info().name);
     reset();
   } else if (std::holds_alternative<eng::GameOver>(ev)) {
     bot_->stop();

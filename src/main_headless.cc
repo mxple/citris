@@ -123,10 +123,7 @@ struct MatchResult {
 
 MatchResult run_match(const Args &args, unsigned seed1, unsigned seed2,
                       const Settings &settings) {
-  // Each match gets its own modes + controllers. We rebuild the bots per match
-  // because InternalTbpBot / ExternalTbpBot aren't designed to be reused across
-  // Start-stop-Start cycles from different games (start() is supported, but
-  // teardown between matches keeps SPRT runs isolated).
+  // Each match gets its own modes + controllers. We rebuild the bots per match.
   auto mode1 = std::make_unique<FreeplayMode>(settings);
   auto mode2 = std::make_unique<FreeplayMode>(settings);
 
@@ -216,7 +213,7 @@ MatchResult run_match(const Args &args, unsigned seed1, unsigned seed2,
 
 int main(int argc, char **argv) {
   Log::init();
-  spdlog::set_level(spdlog::level::warn);
+  spdlog::set_level(spdlog::level::err);
 
   auto parsed = parse_args(argc, argv);
   if (!parsed)

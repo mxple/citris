@@ -8,7 +8,9 @@
 
 class Log {
     inline static std::shared_ptr<spdlog::logger> citris_;
+#if defined(__linux__) && !defined(NDEBUG)
     inline static std::shared_ptr<spdlog::logger> tbp_;
+#endif
     inline static std::chrono::steady_clock::time_point start_;
 
     struct ElapsedFlag : spdlog::custom_flag_formatter {
@@ -34,22 +36,21 @@ public:
     static void init() {
         start_ = std::chrono::steady_clock::now();
 
-        citris_ = spdlog::stdout_color_mt("CITRIS");
+        citris_ = spdlog::stderr_color_mt("CITRIS");
         citris_->set_level(spdlog::level::trace);
         citris_->set_formatter(make_formatter());
 
 #if defined(__linux__) && !defined(NDEBUG)
         tbp_ = spdlog::basic_logger_mt("TBP", "tbp_trace.log", /*truncate=*/true);
         tbp_->set_formatter(make_formatter(/*colors=*/false));
-#else
-        tbp_ = spdlog::stdout_color_mt("TBP");
-        tbp_->set_formatter(make_formatter());
-#endif
         tbp_->set_level(spdlog::level::trace);
+#endif
     }
 
     static spdlog::logger& citris() { return *citris_; }
+#if defined(__linux__) && !defined(NDEBUG)
     static spdlog::logger& tbp()    { return *tbp_; }
+#endif
 };
 
 #define LOG_TRACE(...) ::Log::citris().trace(__VA_ARGS__)
@@ -58,8 +59,16 @@ public:
 #define LOG_WARN(...)  ::Log::citris().warn(__VA_ARGS__)
 #define LOG_ERROR(...) ::Log::citris().error(__VA_ARGS__)
 
+#if defined(__linux__) && !defined(NDEBUG)
 #define TBP_TRACE(...) ::Log::tbp().trace(__VA_ARGS__)
 #define TBP_DEBUG(...) ::Log::tbp().debug(__VA_ARGS__)
 #define TBP_INFO(...)  ::Log::tbp().info(__VA_ARGS__)
 #define TBP_WARN(...)  ::Log::tbp().warn(__VA_ARGS__)
 #define TBP_ERROR(...) ::Log::tbp().error(__VA_ARGS__)
+#else 
+#define TBP_TRACE(...)
+#define TBP_DEBUG(...)
+#define TBP_INFO(...)
+#define TBP_WARN(...)
+#define TBP_ERROR(...)
+#endif

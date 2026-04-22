@@ -5,7 +5,7 @@
 #include "presets/game_mode.h"
 #include "srs.h"
 #include <algorithm>
-#include <fmt/format.h>
+#include <spdlog/fmt/fmt.h>
 
 Game::Game(const GameMode &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)), queue_(mode_.create_queue(seed)) {

@@ -5,11 +5,11 @@
 
 namespace {
 
-// is_good_queue (script7.js:812): the queue can be split into at most two
-// runs of distinct pieces (a new run starts the moment a duplicate appears).
-// Equivalent to "no piece appears more than twice, and the two occurrences
-// straddle a 7-bag boundary." For unique_pieces=1 puzzle queues every piece
-// is distinct, so this trivially holds.
+// the queue can be split into at most two runs of distinct pieces (a new run
+// starts the moment a duplicate appears). Equivalent to "no piece appears more
+// than twice, and the two occurrences straddle a 7-bag boundary." For
+// unique_pieces=1 puzzle queues every piece is distinct, so this trivially
+// holds.
 bool is_good_queue(const std::vector<PieceType> &q) {
   std::vector<PieceType> accum;
   int count = 1;

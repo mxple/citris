@@ -2,7 +2,6 @@
 
 #include "engine/game_state.h"
 #include "engine/piece.h"
-#include "sdl_types.h"
 #include "settings.h"
 #include "view_model.h"
 #include <SDL3/SDL.h>
