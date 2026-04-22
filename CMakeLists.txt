@@ -241,4 +241,14 @@ else()
   if(TARGET test_tbp_external_bot)
     add_dependencies(test_tbp_external_bot citris-tbp-bot)
   endif()
+
+  # citris-headless — AI-vs-AI match runner. Shares the TbpBot / TbpController
+  # stack with the GUI but drives two Games in a tight loop and prints a TSV
+  # summary. Foundation for future SPRT tooling.
+  add_executable(citris-headless src/main_headless.cc)
+  target_link_libraries(citris-headless PRIVATE tetris_lib)
+  # Convenience: if the user points --bot2 at ./build/citris-tbp-bot, having
+  # that target already built makes the dogfood case work after a single
+  # `cmake --build` invocation.
+  add_dependencies(citris-headless citris-tbp-bot)
 endif()
