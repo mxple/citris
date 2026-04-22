@@ -114,7 +114,12 @@ InputSequence find_inputs(const BoardBitset &board, const Placement &target) {
     // CCW
     try_rotate(rotate_ccw(r), is_I ? kKickCCW_I : kKickCCW_JLSTZ);
     // 180
-    try_rotate(rotate_180(r), is_I ? kKick180_I : kKick180_JLSTZ);
+    if (allow_180) {
+      if (is_I)
+        try_rotate(rotate_180(r), kKick180_I);
+      else
+        try_rotate(rotate_180(r), kKick180_JLSTZ);
+    }
   }
 
   return {INT_MAX};
@@ -255,8 +260,12 @@ std::vector<GameInput> find_path(const Board &board, const Placement &target,
                is_I ? kKickCW_I : kKickCW_JLSTZ);
     try_rotate(rotate_ccw(r), GameInput::RotateCCW,
                is_I ? kKickCCW_I : kKickCCW_JLSTZ);
-    try_rotate(rotate_180(r), GameInput::Rotate180,
-               is_I ? kKick180_I : kKick180_JLSTZ);
+    if (allow_180) {
+      if (is_I)
+        try_rotate(rotate_180(r), GameInput::Rotate180, kKick180_I);
+      else
+        try_rotate(rotate_180(r), GameInput::Rotate180, kKick180_JLSTZ);
+    }
   }
 
   return {};

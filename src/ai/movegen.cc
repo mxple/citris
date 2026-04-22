@@ -426,6 +426,9 @@ void generate_moves(const BoardBitset &board, MoveBuffer &out, PieceType type,
 
     do_rotate(rotate_cw(rot), is_I ? kKickCW_I : kKickCW_JLSTZ);
     do_rotate(rotate_ccw(rot), is_I ? kKickCCW_I : kKickCCW_JLSTZ);
-    do_rotate(rotate_180(rot), is_I ? kKick180_I : kKick180_JLSTZ);
+    if (is_I)
+      do_rotate(rotate_180(rot), kKick180_I);
+    else
+      do_rotate(rotate_180(rot), kKick180_JLSTZ);
   }
 }

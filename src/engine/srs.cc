@@ -10,13 +10,20 @@ std::optional<Piece> try_rotate(const Board &board, const Piece &piece,
   bool is_i = (piece.type == PieceType::I);
   int diff = (to - from + 4) % 4;
 
-  if (diff == 2) {
-    const auto &table = is_i ? kKick180_I : kKick180_JLSTZ;
+  auto try_table = [&](const auto &table) -> std::optional<Piece> {
     for (auto &kick : table[from]) {
       Piece test = {piece.type, target, piece.x + kick.x, piece.y + kick.y};
       if (!board.collides(test))
         return test;
     }
+    return std::nullopt;
+  };
+
+  if (diff == 2) {
+    if (is_i)
+      return try_table(kKick180_I);
+    else
+      return try_table(kKick180_JLSTZ);
   } else if (diff == 1) {
     const auto &table = is_i ? kKickCW_I : kKickCW_JLSTZ;
     for (auto &kick : table[from]) {
