@@ -1,4 +1,5 @@
 #include "game_manager.h"
+#include "log.h"
 #include "settings.h"
 #include "ui/menu.h"
 
@@ -108,6 +109,7 @@ static void setup_imgui_style() {
 }
 
 int main(int argc, char *argv[]) {
+  Log::init();
   Settings settings(argv[0]);
 
   SDL_Init(SDL_INIT_VIDEO);
@@ -155,9 +157,12 @@ int main(int argc, char *argv[]) {
   while (true) {
     Menu menu(renderer, window, settings);
     auto mode = menu.run();
-    if (!mode)
-      break;
-    GameManager gm(renderer, window, settings, std::move(mode));
+    if (!mode) break;
+    // Versus-style modes return a non-null opponent; single-player modes
+    // return nullptr and GameManager stays in single-player mode.
+    auto mode2 = mode->opponent_mode(settings);
+    GameManager gm(renderer, window, settings, std::move(mode),
+                   std::move(mode2));
     if (!gm.run())
       break;
 #ifdef __EMSCRIPTEN__

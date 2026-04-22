@@ -80,5 +80,3 @@ struct EvalWeights {
   float well_depth = 0.2f;
   float tsd_overhang = 6.0f;
 };
-
-float evaluate_board(const BoardBitset &board, const EvalWeights &weights);

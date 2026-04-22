@@ -6,6 +6,8 @@
 #include <optional>
 #include <variant>
 
+// These are events the engine emits after applying input and timer events
+
 namespace eng {
 struct PieceLocked {
   PieceType type;
@@ -34,9 +36,14 @@ struct GarbageMaterialized {
 };
 struct UndoPerformed {};
 struct LockDelayExpired {};
+struct IllegalPlacement {};
+struct QueueRefill {
+  PieceType piece;
+};
 } // namespace eng
 
 using EngineEvent =
     std::variant<eng::PieceLocked, eng::PieceSpawned, eng::HoldUsed,
                  eng::GameOver, eng::GarbageMaterialized, eng::UndoPerformed,
-                 eng::LockDelayExpired, Notification>;
+                 eng::LockDelayExpired, eng::IllegalPlacement,
+                 eng::QueueRefill, Notification>;

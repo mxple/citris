@@ -2,8 +2,38 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "linux",
+      "name": "linux-base",
+      "hidden": true,
       "binaryDir": "build",
+      "generator": "Unix Makefiles",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux",
+      "inherits": "linux-base",
+      "displayName": "Linux Release (clang++, libstdc++)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "inherits": "linux-base",
+      "displayName": "Linux Debug (clang++, libstdc++, -O2 -g for stacktrace)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "web",
+      "displayName": "Web (Emscripten, Release)",
+      "binaryDir": "build-web",
+      "generator": "Unix Makefiles",
+      "toolchainFile": "/usr/lib/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -27,6 +57,14 @@
     {
       "name": "linux",
       "configurePreset": "linux"
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug"
+    },
+    {
+      "name": "web",
+      "configurePreset": "web"
     },
     {
       "name": "windows",

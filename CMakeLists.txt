@@ -34,6 +34,12 @@ if(EMSCRIPTEN)
   FetchContent_Declare(imgui_src
     URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.8.tar.gz
   )
+  FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
+  )
+  FetchContent_Declare(spdlog
+    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
+  )
 
   set(SDL_SHARED OFF CACHE BOOL "" FORCE)
   set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -41,9 +47,13 @@ if(EMSCRIPTEN)
   set(SDL3IMAGE_STATIC ON CACHE BOOL "" FORCE)
   set(SDL3IMAGE_JPG OFF CACHE BOOL "" FORCE)
   set(SDL3IMAGE_WEBP OFF CACHE BOOL "" FORCE)
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 
   FetchContent_MakeAvailable(SDL3 SDL3_image)
   FetchContent_MakeAvailable(imgui_src)
+  FetchContent_MakeAvailable(nlohmann_json)
+  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(spdlog)
 
   # Build ImGui as a static library from fetched sources
   add_library(imgui_lib STATIC
@@ -67,6 +77,8 @@ else()
   find_package(SDL3 REQUIRED)
   find_package(SDL3_image REQUIRED)
   find_package(imgui CONFIG REQUIRED)
+  find_package(nlohmann_json CONFIG REQUIRED)
+  find_package(spdlog CONFIG REQUIRED)
 endif()
 
 # Embed font as C header via xxd
@@ -95,10 +107,12 @@ file(GLOB LIB_SOURCES
   "src/ai/*.cc"
   "src/ai/pc/*.cc"
   "src/ai/eval/*.cc"
+  "src/tbp/*.cc"
 )
-list(FILTER LIB_SOURCES EXCLUDE REGEX "main\\.cc$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX "(main\\.cc|main_tbp_bot\\.cc|main_headless\\.cc)$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
 target_precompile_headers(tetris_lib PUBLIC src/pch.h)
+target_compile_options(tetris_lib PUBLIC -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
 target_include_directories(tetris_lib PUBLIC
   src
   src/engine
@@ -108,11 +122,14 @@ target_include_directories(tetris_lib PUBLIC
   src/ai
   src/ai/pc
   src/ai/eval
+  src/tbp
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json spdlog::spdlog)
 if(NOT EMSCRIPTEN)
   target_link_libraries(tetris_lib PUBLIC Threads::Threads)
+  # libstdc++'s std::stacktrace implementation lives in libstdc++exp (GCC 14+).
+  target_link_libraries(tetris_lib PUBLIC stdc++exp)
 endif()
 add_dependencies(tetris_lib embed_font)
 
@@ -212,4 +229,26 @@ else()
     add_executable(${test_name} ${test_src})
     target_link_libraries(${test_name} PRIVATE tetris_lib)
   endforeach()
+
+  # citris-tbp — standalone TBP bot executable. No SDL/ImGui linkage
+  # needed at runtime (it just uses tetris_lib which happens to also link
+  # SDL, but nothing TBP-related calls in).
+  add_executable(citris-tbp src/main_tbp_bot.cc)
+  target_link_libraries(citris-tbp PRIVATE tetris_lib)
+
+  # test_tbp_external_bot spawns citris-tbp; ensure it exists before the
+  # test binary is run. (The test glob above already created the test target.)
+  if(TARGET test_tbp_external_bot)
+    add_dependencies(test_tbp_external_bot citris-tbp)
+  endif()
+
+  # citris-headless — AI-vs-AI match runner. Shares the TbpBot / TbpController
+  # stack with the GUI but drives two Games in a tight loop and prints a TSV
+  # summary. Foundation for future SPRT tooling.
+  add_executable(citris-headless src/main_headless.cc)
+  target_link_libraries(citris-headless PRIVATE tetris_lib)
+  # Convenience: if the user points --bot2 at ./build/citris-tbp, having
+  # that target already built makes the dogfood case work after a single
+  # `cmake --build` invocation.
+  add_dependencies(citris-headless citris-tbp)
 endif()

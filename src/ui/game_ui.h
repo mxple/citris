@@ -18,3 +18,8 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
                   const Settings &settings, GameMode *mode,
                   std::span<IController *> ctrls, AIState *ai,
                   AIController *ai_ctrl);
+
+// Versus variant: renders two boards side-by-side with per-player HUDs and
+// a pending-garbage meter between each board and its opponent. No sidebar.
+void draw_versus_ui(Renderer &renderer, SDL_Window *window,
+                    const VersusViewModel &vvm, const Settings &settings);

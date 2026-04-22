@@ -1,6 +1,5 @@
 #pragma once
 
-#include "sdl_types.h"
 #include <variant>
 
 struct KeyDown {

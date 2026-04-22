@@ -207,7 +207,7 @@ void PlayerController::cancel_sonic_drop(CommandBuffer &cmds) {
   }
 }
 
-void PlayerController::reset_input_state() {
+void PlayerController::reset() {
   held_[0] = held_[1] = false;
   das_charged_[0] = das_charged_[1] = false;
   active_direction_.reset();
@@ -222,7 +222,7 @@ void PlayerController::reset_input_state() {
   hard_drop_blocked_until_ = {};
 }
 
-void PlayerController::notify(const EngineEvent &ev, TimePoint now) {
+void PlayerController::notify(const EngineEvent &ev, TimePoint now, const GameState &) {
   if (std::holds_alternative<eng::LockDelayExpired>(ev)) {
     hard_drop_blocked_until_ = now + settings_.hard_drop_delay;
   }

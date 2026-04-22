@@ -2,7 +2,12 @@
 /.cache
 /references
 /vcpkg_installed
+/CMakeFiles
 
+CMakeCache.txt
 settings.ini
 compile_commands.json
 *.md
+
+flame.svg
+perf.data

@@ -8,6 +8,7 @@
 #include "engine/piece_queue.h"
 #include <deque>
 #include <optional>
+#include <queue>
 #include <vector>
 
 class GameMode;
@@ -28,6 +29,27 @@ public:
 
   int drain_attack();
 
+  // Sum of lines across all queued garbage entries that haven't materialized
+  // yet. Used by the versus HUD for the opponent-attack meter; adds no cost
+  // to the single-player path.
+  int pending_garbage_lines() const {
+    int total = 0;
+    auto pending_garbage = pending_garbage_;
+    while (!pending_garbage.empty()) {
+      total += pending_garbage.front().lines;
+      pending_garbage.pop();
+    }
+    return total;
+  }
+
+  // Cancel up to `amount` lines from the NEWEST end of pending_garbage_
+  // (LIFO — cancel newest incoming garbage first). Partial cancellation
+  // within a batch decrements the back entry in place, preserving its
+  // gap_col for any unconsumed remainder. Returns the number of lines
+  // actually cancelled. Called by route_garbage_between on the sender
+  // before forwarding any outgoing-attack remainder to the opponent.
+  int cancel_buffered_garbage(int amount);
+
   std::optional<TimePoint> next_deadline() const;
 
 private:
@@ -36,7 +58,12 @@ private:
   void handle_gravity(TimePoint expired_at);
   void handle_lock_delay_expired();
   void handle_garbage_received(int lines, int gap_col, bool immediate);
-  void handle_garbage_delay_expired();
+  // Materialize up to `cap` lines of buffered garbage from pending_garbage_,
+  // preserving each batch's gap_col. If the cap falls mid-batch, the
+  // remaining lines stay in pending_garbage_ with the *same* gap_col so the
+  // next materialization continues on the same well. Called after a piece
+  // locks without clearing any lines.
+  void materialize_buffered_garbage(int cap);
   void handle_set_game_over(bool won);
   void handle_undo();
 
@@ -60,6 +87,10 @@ private:
   struct PendingGarbage {
     int lines;
     int gap_col;
+    // When the batch was received. A batch cannot materialize until
+    // (now_ - arrival_time) >= mode_.garbage_delay() — giving the receiver
+    // a reactive window to cancel with an outgoing attack.
+    TimePoint arrival_time;
   };
 
   struct GameSnapshot {
@@ -69,7 +100,7 @@ private:
     bool hold_available;
     AttackState attack_state;
     int lock_resets_remaining;
-    std::vector<PendingGarbage> pending_garbage;
+    std::queue<PendingGarbage> pending_garbage;
     LastClear last_clear;
     int piece_gen;
     int pending_attack;
@@ -99,13 +130,14 @@ private:
   mutable PieceQueue queue_;
   int lock_resets_remaining_ = 0;
 
-  std::vector<PendingGarbage> pending_garbage_;
+  std::queue<PendingGarbage> pending_garbage_;
 
   LastClear last_clear_;
   int piece_gen_ = 0;
   int pending_attack_ = 0;
   int lines_cleared_ = 0;
   int total_attack_ = 0;
+  bool paused_ = false;
   bool game_over_ = false;
   bool won_ = false;
   bool dirty_ = true;
@@ -117,7 +149,11 @@ private:
   // Internal timers (replacing TimerManager dependency)
   std::optional<TimePoint> gravity_deadline_;
   std::optional<TimePoint> lock_delay_deadline_;
-  std::optional<TimePoint> garbage_delay_deadline_;
+
+  // Maximum lines of garbage that can materialize on a single non-clearing
+  // lock. Competitive default is 8; excess stays buffered for the next
+  // non-clearing lock, retaining the current well's gap column.
+  static constexpr int kMaxGarbagePerLock = 8;
 
   // Engine events produced during apply/tick
   std::vector<EngineEvent> pending_events_;

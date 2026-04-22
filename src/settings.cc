@@ -33,7 +33,6 @@ Settings::Settings(const char *argv0) {
     base_dir = ".";
   load(path_join(base_dir, "settings.ini"));
   skin_path = path_join(base_dir, skin_path);
-  font_path = path_join(base_dir, font_path);
 }
 
 static const std::unordered_map<std::string, KeyCode> kKeyMap = {

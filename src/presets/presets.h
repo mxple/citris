@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "sprint.h"
 #include "tspin_practice.h"
+#include "versus.h"
 #include <memory>
 #include <vector>
 
@@ -15,6 +16,7 @@ inline std::vector<std::unique_ptr<GameMode>> play_modes(const Settings& setting
   modes.push_back(std::make_unique<SprintMode>());
   modes.push_back(std::make_unique<BlitzMode>());
   modes.push_back(std::make_unique<CheeseMode>());
+  modes.push_back(std::make_unique<VersusMode>(settings));
   return modes;
 }
 

@@ -406,16 +406,22 @@ void AI::expand_one_depth(std::span<const PieceType> queue) {
     });
   }
 
-  // Sort and truncate
-  std::sort(next_beam_.begin(), next_beam_.end(),
-            [](const BeamNode &a, const BeamNode &b) {
-              float sa = a.effective_score(), sb = b.effective_score();
-              if (sa != sb)
-                return sa > sb;
-              return a.state.input_count < b.state.input_count;
-            });
-  if ((int)next_beam_.size() > config_.beam_width)
+  // Top-K via nth_element (linear), then sort just the K survivors. The K-sort
+  // is needed because root_scores_ collection below relies on sorted-by-score
+  // order (first-hit-per-move-key wins).
+  auto cmp = [](const BeamNode &a, const BeamNode &b) {
+    float sa = a.effective_score(), sb = b.effective_score();
+    if (sa != sb)
+      return sa > sb;
+    return a.state.input_count < b.state.input_count;
+  };
+  if ((int)next_beam_.size() > config_.beam_width) {
+    std::nth_element(next_beam_.begin(),
+                     next_beam_.begin() + config_.beam_width,
+                     next_beam_.end(), cmp);
     next_beam_.resize(config_.beam_width);
+  }
+  std::sort(next_beam_.begin(), next_beam_.end(), cmp);
 
   // Collect best score per root move — updated every depth so that
   // root_scores_ always reflects the best descendant, not just depth-1.

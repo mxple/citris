@@ -1,5 +1,4 @@
 #pragma once
-#include "sdl_types.h"
 #include <chrono>
 #include <string>
 
@@ -27,7 +26,6 @@ struct Settings {
 
   // Rendering (paths below are resolved to absolute form in the ctor)
   std::string skin_path = "assets/skin.png";
-  std::string font_path = "assets/FreeMono.otf";
 
   // Controls
   KeyCode move_left = SDLK_LEFT;

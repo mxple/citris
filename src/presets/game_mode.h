@@ -6,6 +6,7 @@
 #include "engine/piece_queue.h"
 #include "engine/piece_source.h"
 #include "render/view_model.h"
+#include "tbp/bot.h"
 #include <chrono>
 #include <memory>
 #include <string>
@@ -18,6 +19,32 @@ public:
   virtual ~GameMode() = default;
 
   virtual std::string title() const { return "Freeplay"; }
+
+  // Versus hook: if this mode represents a 1v1 match, return a fresh
+  // GameMode instance for the opponent. Default returns nullptr
+  // (single-player). GameManager's constructor takes this as mode2.
+  virtual std::unique_ptr<GameMode>
+  opponent_mode(const class Settings &) const {
+    return nullptr;
+  }
+
+  // Versus hook: build the TbpBot that drives the opponent. Default falls
+  // back to Citris's in-process AI in GameManager if this returns nullptr.
+  virtual std::unique_ptr<tbp::TbpBot> make_opponent_bot() const {
+    return nullptr;
+  }
+
+  // Versus hook, per-player: build the TbpBot for player `idx` (0 = p1,
+  // 1 = p2). nullptr means the player is Human and GameManager wires a
+  // PlayerController. Default defers to make_opponent_bot() for idx=1 so
+  // single-opponent modes keep working.
+  virtual std::unique_ptr<tbp::TbpBot> make_player_bot(int idx) const {
+    return idx == 1 ? make_opponent_bot() : nullptr;
+  }
+
+  // Optional think-time rate cap for a given player's TbpController. 0 =
+  // no cap. Only meaningful when make_player_bot(idx) returns non-null.
+  virtual int think_time_ms(int /*idx*/) const { return 0; }
 
   // Tuning
   virtual std::chrono::milliseconds gravity_interval() const {
@@ -37,6 +64,10 @@ public:
   virtual PieceQueue create_queue(unsigned seed) const {
     return PieceQueue(std::make_unique<SevenBagSource>(seed));
   }
+  // Size of the preview window Game exposes via GameState::queue. Engines
+  // and controllers consume the full window; the renderer clamps to 5 for
+  // display. 15 is enough for 6-line PC search.
+  virtual int queue_visible() const { return 5; }
   virtual bool auto_restart() const { return false; }
 
   // Lifecycle
