@@ -5,34 +5,60 @@
 #include "placement.h"
 #include <vector>
 
-// Result of pathfinding — the shortest input sequence from spawn to target.
-struct InputSequence {
-  int length = 0;                 // number of inputs (for PQ ordering in search)
-  // TODO: store actual GameInput list for visualization/replay
-};
-
-// BFS from spawn position to target placement.
-// Recovers the shortest input sequence (shift, rotate, soft-drop, hard-drop)
-// that reaches the target.  Used to compute input count for beam search move
-// ordering (prefer simpler placements at equal eval score).
+// Pathfinder overview
+// -------------------
+// Both entry points below are thin wrappers around one templated BFS in
+// pathfinder.cc (`pathfind_impl`). The BFS walks (x, rotation, y) states
+// through an alphabet of shifts, soft/sonic drops, and SRS-kicked rotations,
+// and terminates when a hard-drop from the current state lands on the
+// target's canonical cells — subject to the match_spin gate described below.
 //
-// Algorithm (from fusion/src/pathfinder.rs):
-//   1. Build CollisionMap for the piece type on the board.
-//   2. BFS state: searched[col][rotation] = u64 bitboard of visited Y positions.
-//   3. Seed queue with spawn position (spawn_col, spawn_row, North, 0 inputs).
-//   4. For each state in queue:
-//      a. Hard-drop check: if col == target.x and drop_y == target.y and
-//         rotation matches → found, return input count.
-//      b. Expand: rotate CW/CCW/180 (with SRS kicks), shift left/right,
-//         soft-drop — each costs 1 input.
-//      c. DAS finesse: slide to wall in one input (optional).
-//   5. Return InputSequence with length, or length=INT_MAX if unreachable.
-InputSequence find_inputs(const BoardBitset &board, const Placement &target);
+// The two entry points differ along two axes:
+//   * Collision source. count_inputs works over a precomputed CollisionMap
+//     (O(1) bit-test) built from a BoardBitset; find_path works over a live
+//     engine Board via Board::collides.
+//   * Output shape. count_inputs returns only an input count (no vector
+//     allocation on the hot path); find_path returns the full GameInput
+//     sequence — including the player-style macro alphabet (LLeft / RRight
+//     / SonicDrop) that the count-only path omits.
+//
+// match_spin
+// ----------
+// When match_spin is true, termination is gated against the engine's
+// detect_spin semantics (engine runs detect_spin only if the lock's last
+// input was a rotation):
+//   - target.spin != None: require via_rot. Position is already verified
+//     by movegen's label — cell-match uniquely determines Mini vs TSpin vs
+//     AllSpin because the engine's classifier is purely position-based.
+//   - target.spin == None: allow either arrival, EXCEPT for T pieces where
+//     arriving via rotation at a 3-corner position would be upgraded to
+//     Mini/TSpin by the engine. For non-T, 4-way immobility implies the
+//     position was only reachable via rotation during flood-fill, so
+//     movegen would have labeled it AllSpin — it cannot be a None target.
+//     The T 3-corner case is checked at termination via is_filled.
+//
+// Fuzzy mode (false) terminates on any cell-matching state regardless of
+// how it was arrived at. Fine for cost estimation, wrong for replay of
+// spin-tagged placements.
+//
+// allow_180
+// ---------
+// When false, Rotate180 (and its kick table) is not explored. Placements
+// that rely on 180-only kicks may become unreachable.
+//
+// sonic_only
+// ----------
+// When true, the atomic SoftDrop edge (y -> y-1) is suppressed; vertical
+// motion is only available via SonicDrop (teleport to ghost). Mirrors
+// movegen's sonic_only flag — useful when soft-drop tucks should not be
+// considered (e.g. evaluating "can this be reached without tucking?").
 
-// PQ search from (start_x, start_y, start_rot) to target placement.
-// Uses Board::collides directly (same collision as game engine).
-// Returns the sequence of GameInputs (including final HardDrop) to reach
-// target. Empty vector if unreachable.
+int count_inputs(const BoardBitset &board, const Placement &target,
+                          bool allow_180 = true, bool match_spin = false,
+                          bool sonic_only = false);
+
 std::vector<GameInput> find_path(const Board &board, const Placement &target,
                                  int start_x, int start_y,
-                                 Rotation start_rot);
+                                 Rotation start_rot, bool allow_180 = true,
+                                 bool match_spin = false,
+                                 bool sonic_only = false);

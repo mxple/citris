@@ -92,7 +92,7 @@ void PlayerController::handle_key_down(KeyCode key, TimePoint now,
   if (!input)
     return;
 
-  cmds.push(cmd::Passthrough{note::InputRegistered{}});
+  cmds.push(cmd::Passthrough{note::InputRegistered{*input}});
 
   switch (*input) {
   case Input::Left:

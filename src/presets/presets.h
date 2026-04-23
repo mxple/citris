@@ -2,6 +2,7 @@
 
 #include "blitz.h"
 #include "cheese.h"
+#include "finesse_trainer.h"
 #include "freeplay.h"
 #include "settings.h"
 #include "sprint.h"
@@ -32,5 +33,9 @@ inline std::vector<std::unique_ptr<GameMode>> training_modes(const Settings&) {
       std::make_unique<TSpinPracticeMode>(5, TSpinVariant::Cspin));
   modes.push_back(
       std::make_unique<TSpinPracticeMode>(5, TSpinVariant::Fractal));
+  modes.push_back(
+      std::make_unique<FinesseTrainerMode>(FinesseDifficulty::Normal));
+  modes.push_back(
+      std::make_unique<FinesseTrainerMode>(FinesseDifficulty::Advanced));
   return modes;
 }

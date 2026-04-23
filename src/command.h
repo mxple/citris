@@ -3,7 +3,7 @@
 #include "ai/placement.h"
 #include "notification.h"
 
-enum class GameInput {
+enum class GameInput : int {
   Left,
   Right,
   RotateCW,
@@ -60,4 +60,29 @@ public:
 
 private:
   std::vector<Command> cmds_;
+};
+
+template <>
+struct fmt::formatter<GameInput> {
+    constexpr auto parse(format_parse_context& ctx) {
+        return ctx.end();
+    }
+    
+    template <typename FormatContext>
+    auto format(GameInput input, FormatContext& ctx) const {
+        switch (input) {
+            case GameInput::Left: return fmt::format_to(ctx.out(), "Left");
+            case GameInput::Right: return fmt::format_to(ctx.out(), "Right");
+            case GameInput::RotateCW: return fmt::format_to(ctx.out(), "RotateCW");
+            case GameInput::RotateCCW: return fmt::format_to(ctx.out(), "RotateCCW");
+            case GameInput::Rotate180: return fmt::format_to(ctx.out(), "Rotate180");
+            case GameInput::SoftDrop: return fmt::format_to(ctx.out(), "SoftDrop");
+            case GameInput::HardDrop: return fmt::format_to(ctx.out(), "HardDrop");
+            case GameInput::Hold: return fmt::format_to(ctx.out(), "Hold");
+            case GameInput::LLeft: return fmt::format_to(ctx.out(), "LLeft");
+            case GameInput::RRight: return fmt::format_to(ctx.out(), "RRight");
+            case GameInput::SonicDrop: return fmt::format_to(ctx.out(), "SonicDrop");
+            default: return fmt::format_to(ctx.out(), "Unknown");
+        }
+    }
 };

@@ -6,8 +6,8 @@
 #include <chrono>
 
 enum class AIInputMode {
-  RealInputs,       // pathfind internally, replay GameInput path
-  DirectPlacement,   // cmd::Place — skip input simulation entirely
+  RealInputs,      // pathfind internally, replay GameInput path
+  DirectPlacement, // cmd::Place — skip input simulation entirely
 };
 
 class AIController : public IController {
@@ -20,8 +20,8 @@ public:
         .count();
   }
   void set_interval_ms(int ms) {
-    interval_ = std::chrono::duration_cast<Duration>(
-        std::chrono::milliseconds(ms));
+    interval_ =
+        std::chrono::duration_cast<Duration>(std::chrono::milliseconds(ms));
   }
 
   void set_placement(Placement placement, bool uses_hold) {
@@ -66,7 +66,8 @@ public:
     pending_placement_.reset();
   }
 
-  void notify(const EngineEvent &ev, TimePoint, const GameState &state) override {
+  void notify(const EngineEvent &ev, TimePoint,
+              const GameState &state) override {
     if (std::holds_alternative<eng::PieceLocked>(ev) ||
         std::holds_alternative<eng::UndoPerformed>(ev))
       reset();
@@ -92,13 +93,15 @@ private:
     if (action.uses_hold) {
       path_.push_back(GameInput::Hold);
       auto spawn = spawn_position(action.placement.type);
-      auto moves = find_path(state.board, action.placement, spawn.x, spawn.y,
-                             Rotation::North);
+      auto moves =
+          find_path(state.board, action.placement, spawn.x, spawn.y,
+                    Rotation::North, /*allow_180=*/true, /*match_spin=*/true);
       path_.insert(path_.end(), moves.begin(), moves.end());
     } else {
       auto &piece = state.current_piece;
       path_ = find_path(state.board, action.placement, piece.x, piece.y,
-                        piece.rotation);
+                        piece.rotation, /*allow_180=*/true,
+                        /*match_spin=*/true);
     }
     path_idx_ = 0;
   }
@@ -121,6 +124,6 @@ private:
   std::vector<GameInput> path_;
   int path_idx_ = 0;
   TimePoint next_input_time_{};
-  Duration interval_{std::chrono::duration_cast<Duration>(
-      std::chrono::milliseconds(250))};
+  Duration interval_{
+      std::chrono::duration_cast<Duration>(std::chrono::milliseconds(250))};
 };

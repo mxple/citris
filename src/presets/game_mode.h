@@ -2,6 +2,7 @@
 
 #include "command.h"
 #include "engine_event.h"
+#include "notification.h"
 #include "engine/game_state.h"
 #include "engine/piece_queue.h"
 #include "engine/piece_source.h"
@@ -79,6 +80,9 @@ public:
                                CommandBuffer &) {}
   virtual void on_undo(const GameState &) {}
   virtual void on_tick(TimePoint, const GameState &, CommandBuffer &) {}
+  // Fires once per distinct user keypress (DAS/ARR repeats are not reported).
+  // Fires even after game-over so modes can react to acknowledgement keys.
+  virtual void on_input_registered(GameInput, const GameState &) {}
 
   // View model population
   virtual void fill_hud(HudData &, const GameState &, TimePoint) {}

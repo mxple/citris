@@ -124,8 +124,8 @@ void AIState::on_piece_locked(const eng::PieceLocked &ev) {
   if (plan_source_ != PlanSource::None && !plan_.complete() &&
       plan_.current()) {
     const auto &p = plan_.current()->placement;
-    bool match = ev.type == p.type && ev.rotation == p.rotation &&
-                 ev.x == p.x && ev.y == p.y;
+    Placement locked{ev.type, ev.rotation, (int8_t)ev.x, (int8_t)ev.y};
+    bool match = locked.canonical().same_landing(p.canonical());
     if (match) {
       plan_.advance();
       if (plan_.complete()) {

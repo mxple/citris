@@ -22,8 +22,13 @@ Game::Game(const GameMode &mode, Board board, unsigned seed)
 
 void Game::apply(const CommandBuffer &cmds) {
   for (const auto &cmd : cmds) {
-    if (game_over_ /*|| paused_*/)
-      break;
+    if (game_over_ /*|| paused_*/) {
+      // Notifications are informational and must still reach listeners
+      // (e.g. modes tracking keypresses in a game-over review state).
+      if (auto *p = std::get_if<cmd::Passthrough>(&cmd))
+        pending_events_.push_back(p->notification);
+      continue;
+    }
     std::visit(
         [&](auto &&c) {
           using T = std::decay_t<decltype(c)>;

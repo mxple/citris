@@ -276,6 +276,9 @@ void GameManager::process_engine_events(TimePoint now,
       mode_->on_piece_locked(*pl, game_->state(), rule_cmds);
     } else if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev)) {
       ai_state_.on_garbage(gm->lines);
+    } else if (auto *n = std::get_if<Notification>(&ev)) {
+      if (auto *ir = std::get_if<note::InputRegistered>(n))
+        mode_->on_input_registered(ir->input, game_->state());
     } else if (undo) {
       for (auto &ctrl : controllers_)
         ctrl->reset();
