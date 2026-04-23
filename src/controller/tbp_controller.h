@@ -3,11 +3,9 @@
 // IController that drives a Game from any TbpBot (internal or external).
 
 #include "controller/controller.h"
-#include "engine/piece.h"
 #include "engine_event.h"
 #include "tbp/bot.h"
 
-#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -32,11 +30,6 @@ public:
   void reset() override;
   void notify(const EngineEvent &ev, TimePoint now, const GameState &state) override;
   void post_hook(TimePoint now, const GameState &state) override;
-  void fill_plan_overlay(ViewModel &vm, const GameState &state) override;
-
-  // Toggle plan-overlay rendering. Only meaningful when the wrapped bot
-  // exposes its principal variation (InternalTbpBot today).
-  void set_show_plan(bool s) { show_plan_ = s; }
 
   // For diagnostics / inspection.
   const tbp::TbpBot &bot() const { return *bot_; }
@@ -63,7 +56,6 @@ private:
   std::unique_ptr<tbp::TbpBot> bot_;
   int think_time_ms_ = 0;
   TimePoint last_placement_time_{};
-  bool show_plan_ = false;
   // The most recent unplayed suggestion. Filled on each poll_suggestion()
   // hit; consumed when the think_time gate releases and we push a
   // cmd::Place. Decoupling poll from place keeps the plan cache fresh for

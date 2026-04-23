@@ -1,15 +1,10 @@
 #include "controller/tbp_controller.h"
 
-#include "ai/board_bitset.h"
 #include "ai/placement.h"
-#include "ai/plan.h"
-#include "ai/plan_overlay.h"
 #include "engine_event.h"
 #include "game_state.h"
 #include "log.h"
 #include "tbp/conversions.h"
-#include "tbp/external_bot.h"
-#include "tbp/internal_bot.h"
 #include "tbp/types.h"
 
 #include <variant>
@@ -137,39 +132,6 @@ void TbpController::post_hook(TimePoint now, const GameState &state) {
     needs_suggest_ = false;
     bot_->request_suggestion();
   }
-}
-
-void TbpController::fill_plan_overlay(ViewModel &vm, const GameState &state) {
-  if (!show_plan_)
-    return;
-
-  // Only the placement field of Plan::Step is consumed by
-  // build_plan_overlay; the rest stays default.
-  auto plan = bot_->last_plan();
-  if (plan.empty())
-    return;
-  std::vector<Plan::Step> steps;
-  steps.reserve(plan.size());
-  for (const auto &p : plan) {
-    Plan::Step step;
-    step.placement = p;
-    steps.push_back(std::move(step));
-  }
-
-  // Defensive: only render if the first planned step actually plays the
-  // current piece (or held piece — bot may intend to hold-then-play). This
-  // filters out a brief window after PieceLocked where the cache might
-  // still describe the piece we just placed (esp. for external bots that
-  // rely on the next poll to refresh).
-  PieceType first_type = steps.front().placement.type;
-  bool type_ok = first_type == state.current_piece.type ||
-                 (state.hold_piece && *state.hold_piece == first_type);
-  if (!type_ok)
-    return;
-
-  BoardBitset sim = BoardBitset::from_board(state.board);
-  vm.plan_overlay =
-      build_plan_overlay(std::move(sim), steps, /*max_visible=*/7);
 }
 
 void TbpController::resync(const GameState &state) {

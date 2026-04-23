@@ -1,7 +1,6 @@
 #include "board.h"
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 
 bool Board::collides(const Piece &piece) const {
   return std::ranges::any_of(piece.cells_absolute(), [this](Vec2 cell) {

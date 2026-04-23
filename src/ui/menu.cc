@@ -141,7 +141,6 @@ std::unique_ptr<GameMode> Menu::run() {
           ImGui::SetNextItemWidth(col_w);
           ImGui::InputText("##path", path_buf, path_sz);
           ImGui::SetCursorPosX(x);
-          ImGui::TextDisabled("e.g. ./build/citris-tbp-bot");
         } else if (*kind == 1) { // CitrisAi
           ImGui::SetCursorPosX(x);
           ImGui::TextDisabled("Beam width");

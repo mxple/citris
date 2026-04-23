@@ -128,8 +128,10 @@ target_include_directories(tetris_lib PUBLIC
 target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json spdlog::spdlog)
 if(NOT EMSCRIPTEN)
   target_link_libraries(tetris_lib PUBLIC Threads::Threads)
-  # libstdc++'s std::stacktrace implementation lives in libstdc++exp (GCC 14+).
-  target_link_libraries(tetris_lib PUBLIC stdc++exp)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # libstdc++'s std::stacktrace implementation lives in libstdc++exp (GCC 14+).
+    target_link_libraries(tetris_lib PUBLIC stdc++exp)
+  endif()
 endif()
 add_dependencies(tetris_lib embed_font)
 

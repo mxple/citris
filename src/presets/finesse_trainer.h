@@ -189,15 +189,6 @@ public:
       regenerate_next_ = true;
       pending_restart_ = true;
     }
-
-    ImGui::Separator();
-    ImGui::TextWrapped(
-        "%s",
-        difficulty_ == FinesseDifficulty::Normal
-            ? "Match the ghost with the fewest keypresses. No soft drop "
-              "required."
-            : "Prefers placements requiring soft drop with 6+ inputs (Hard), "
-              "falls back to soft-drop (Medium), then no-soft-drop (Easy).");
   }
 
   bool consume_restart_request() override {

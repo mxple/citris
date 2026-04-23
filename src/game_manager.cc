@@ -158,8 +158,6 @@ run_start:
         } else if (kd->key == settings_.reset_game) {
           reset();
           goto run_start;
-        } else if (kd->key == settings_.debug_menu) {
-          debug_window_visible_ = !debug_window_visible_;
         }
       }
       TimePoint event_time = now;
@@ -231,8 +229,6 @@ run_start:
       ctrl->draw_imgui();
     mode_->draw_imgui();
 
-    propagate_show_plan();
-
     if (game2_) {
       VersusViewModel vvm = build_versus_view_model(now);
       draw_versus_ui(*game_renderer_, window_, vvm, settings_);
@@ -245,8 +241,6 @@ run_start:
       draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
                    ctrl_ptrs, &ai_state_, ai_controller_);
     }
-
-    draw_debug_window();
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
@@ -392,26 +386,4 @@ std::string GameManager::player_name(int idx) const {
       return tc->bot().info().name;
   }
   return "HUMAN";
-}
-
-void GameManager::propagate_show_plan() {
-  auto apply = [&](const std::vector<std::unique_ptr<IController>> &list) {
-    for (auto &c : list)
-      if (auto *tc = dynamic_cast<TbpController *>(c.get()))
-        tc->set_show_plan(show_bot_plans_);
-  };
-  apply(controllers_);
-  apply(controllers2_);
-}
-
-void GameManager::draw_debug_window() {
-  if (!debug_window_visible_) return;
-  ImGui::SetNextWindowSize(ImVec2(260, 0), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
-  if (ImGui::Begin("Debug", &debug_window_visible_)) {
-    ImGui::Checkbox("Show AI plans", &show_bot_plans_);
-    ImGui::TextDisabled("Toggle: %s",
-                        SDL_GetKeyName(settings_.debug_menu));
-  }
-  ImGui::End();
 }

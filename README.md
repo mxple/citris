@@ -1,6 +1,6 @@
 # Citris
 
-A modern Tetris training tool aiming to be the best tool of its kind out there.
+A modern Tetris training tool, aiming to be the best tool of its kind.
 
 Try it online [here!](https://mxple.wtf/citris)
 
@@ -16,8 +16,8 @@ Native builds for all Windows, MacOS, and Linux are available in Releases.
 - [x] PC finder
 - [ ] Custom queue + maps
 - [ ] Opener library + trainer
-- [ ] Finesse and advanced finesse trainer
-- [ ] VS mode against AI
+- [x] Finesse and advanced finesse trainer
+- [x] VS mode against AI
 - [ ] Networked multiplayer (?)
 
 ## Contributing
@@ -26,12 +26,12 @@ Contributing skins, bug reports, suggestions, and code is much appreciated! Open
 
 ## Building
 
-You'll need a C++23 compiler, [SDL](https://www.libsdl.org/), and [ImGUI](https://github.com/ocornut/imgui).
+You'll need a C++23 compiler, [SDL3](https://www.libsdl.org/), and [ImGUI](https://github.com/ocornut/imgui).
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
-./build/tetris
+./build/citris
 ```
 
 Settings are loaded from `settings.ini` in the project root. Copy `assets/default_settings.ini` to get started, or the game will use sensible defaults.
