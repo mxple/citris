@@ -9,6 +9,9 @@ project(citris LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(NOT EMSCRIPTEN)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
@@ -96,7 +99,7 @@ add_custom_command(
 )
 add_custom_target(embed_font DEPENDS "${FONT_HEADER}")
 
-# Game library (all src/ except main.cc) — shared between main exe and tests
+# Game library — all src/ subtree; shippable entry points live in bin/
 file(GLOB LIB_SOURCES
   "src/*.cc"
   "src/engine/*.cc"
@@ -109,7 +112,6 @@ file(GLOB LIB_SOURCES
   "src/ai/eval/*.cc"
   "src/tbp/*.cc"
 )
-list(FILTER LIB_SOURCES EXCLUDE REGEX "(main\\.cc|main_tbp_bot\\.cc|main_headless\\.cc)$")
 add_library(tetris_lib STATIC ${LIB_SOURCES})
 target_precompile_headers(tetris_lib PUBLIC src/pch.h)
 target_compile_options(tetris_lib PUBLIC -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
@@ -137,7 +139,7 @@ add_dependencies(tetris_lib embed_font)
 
 if(EMSCRIPTEN)
   # Main executable — no WIN32/MACOSX_BUNDLE for WASM
-  add_executable(citris src/main.cc)
+  add_executable(citris bin/main_citris.cc)
   target_link_libraries(citris PRIVATE tetris_lib)
 
   # Copy coi-serviceworker.js into build dir (needed for SharedArrayBuffer headers)
@@ -166,7 +168,7 @@ if(EMSCRIPTEN)
   )
 else()
   # Main executable — WIN32/MACOSX_BUNDLE suppress the console window
-  add_executable(citris WIN32 MACOSX_BUNDLE src/main.cc)
+  add_executable(citris WIN32 MACOSX_BUNDLE bin/main_citris.cc)
   target_link_libraries(citris PRIVATE tetris_lib)
 
   # Copy runtime data into build dir for local runs
@@ -232,25 +234,26 @@ else()
     target_link_libraries(${test_name} PRIVATE tetris_lib)
   endforeach()
 
-  # citris-tbp — standalone TBP bot executable. No SDL/ImGui linkage
-  # needed at runtime (it just uses tetris_lib which happens to also link
-  # SDL, but nothing TBP-related calls in).
-  add_executable(citris-tbp src/main_tbp_bot.cc)
-  target_link_libraries(citris-tbp PRIVATE tetris_lib)
+  # Auxiliary CLI tools — every bin/main_*.cc (except main_citris.cc, the GUI
+  # above) becomes an executable named citris-<stem>. Drop a new main_X.cc
+  # into bin/ and the next build picks it up. CONFIGURE_DEPENDS makes CMake
+  # re-glob on each build instead of requiring a manual reconfigure.
+  file(GLOB BIN_AUX_SOURCES CONFIGURE_DEPENDS "bin/main_*.cc")
+  list(FILTER BIN_AUX_SOURCES EXCLUDE REGEX "main_citris\\.cc$")
+  foreach(bin_src ${BIN_AUX_SOURCES})
+    get_filename_component(bin_stem ${bin_src} NAME_WE)        # main_tbp
+    string(REGEX REPLACE "^main_" "citris-" bin_tgt ${bin_stem}) # citris-tbp
+    add_executable(${bin_tgt} ${bin_src})
+    target_link_libraries(${bin_tgt} PRIVATE tetris_lib)
+  endforeach()
 
-  # test_tbp_external_bot spawns citris-tbp; ensure it exists before the
-  # test binary is run. (The test glob above already created the test target.)
-  if(TARGET test_tbp_external_bot)
+  # Explicit inter-target edges (not derivable from filenames):
+  #   test_tbp_external_bot spawns citris-tbp at runtime.
+  #   citris-headless dogfoods citris-tbp when you pass it as --bot2.
+  if(TARGET test_tbp_external_bot AND TARGET citris-tbp)
     add_dependencies(test_tbp_external_bot citris-tbp)
   endif()
-
-  # citris-headless — AI-vs-AI match runner. Shares the TbpBot / TbpController
-  # stack with the GUI but drives two Games in a tight loop and prints a TSV
-  # summary. Foundation for future SPRT tooling.
-  add_executable(citris-headless src/main_headless.cc)
-  target_link_libraries(citris-headless PRIVATE tetris_lib)
-  # Convenience: if the user points --bot2 at ./build/citris-tbp, having
-  # that target already built makes the dogfood case work after a single
-  # `cmake --build` invocation.
-  add_dependencies(citris-headless citris-tbp)
+  if(TARGET citris-headless AND TARGET citris-tbp)
+    add_dependencies(citris-headless citris-tbp)
+  endif()
 endif()

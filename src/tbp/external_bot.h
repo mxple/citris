@@ -1,7 +1,7 @@
 #pragma once
 
 // Subprocess-backed TbpBot. Launches an external executable (e.g. cold-clear,
-// blockfish, or our own citris-tbp-bot) and communicates over stdin/stdout
+// blockfish, or our own citris-tbp) and communicates over stdin/stdout
 // pipes using the TBP JSON codec.
 //
 // Threading:

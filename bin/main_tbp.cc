@@ -1,4 +1,4 @@
-// citris-tbp-bot — TBP bot executable.
+// citris-tbp — TBP bot executable.
 //
 // Reads JSON-per-line on stdin, writes JSON-per-line on stdout. Stderr is
 // reserved for diagnostic logging (only when --verbose is passed).

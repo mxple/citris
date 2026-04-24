@@ -37,11 +37,11 @@ jobs:
       - name: Prepare pages artifact
         run: |
           mkdir _site
-          cp build-web/citris.html _site/index.html
-          cp build-web/citris.js _site/
-          cp build-web/citris.wasm _site/
-          cp build-web/citris.data _site/ 2>/dev/null || true
-          cp build-web/citris.worker.js _site/ 2>/dev/null || true
+          cp build-web/bin/citris.html _site/index.html
+          cp build-web/bin/citris.js _site/
+          cp build-web/bin/citris.wasm _site/
+          cp build-web/bin/citris.data _site/ 2>/dev/null || true
+          cp build-web/bin/citris.worker.js _site/ 2>/dev/null || true
           cp web/coi-serviceworker.js _site/
 
       - name: Upload Pages artifact

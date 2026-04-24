@@ -5,11 +5,11 @@
 //
 // Usage:
 //   citris-headless --bot1 <internal|path/to/exe>
-//                    --bot2 <internal|path/to/exe>
-//                    --games N
-//                    --seed S
-//                    [--max-ticks T]
-//                    [--think-time-ms X]
+//                   --bot2 <internal|path/to/exe>
+//                   --games N
+//                   --seed S
+//                   [--max-ticks T]
+//                   [--think-time-ms X]
 
 #include "command.h"
 #include "controller/tbp_controller.h"

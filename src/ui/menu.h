@@ -40,7 +40,7 @@ private:
   int p1_kind_ = 0;
   int p2_kind_ = 1;
   char p1_path_[512] = {};
-  char p2_path_[512] = {"./build/citris-tbp"};
+  char p2_path_[512] = {"./build/bin/citris-tbp"};
   int p1_beam_ = 800, p1_depth_ = 14, p1_think_ms_ = 0;
   int p2_beam_ = 800, p2_depth_ = 14, p2_think_ms_ = 0;
 };
