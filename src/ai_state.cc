@@ -9,14 +9,22 @@
 
 namespace {
 
+static constexpr char kPieceChar[] = "IOTSZJL";
+static constexpr char kRotChar[] = "NESW";
+static const char *kSpinLabel[] = {"----", "mini", "full", "all "};
+
 int mode_to_index(const AIMode &m) {
   return std::visit(
       [](const auto &v) -> int {
         using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, AtkMode>)  return 0;
-        if constexpr (std::is_same_v<T, WellMode>) return 1;
-        if constexpr (std::is_same_v<T, DownMode>) return 2;
-        if constexpr (std::is_same_v<T, PcMode>)   return 3;
+        if constexpr (std::is_same_v<T, AtkMode>)
+          return 0;
+        if constexpr (std::is_same_v<T, WellMode>)
+          return 1;
+        if constexpr (std::is_same_v<T, DownMode>)
+          return 2;
+        if constexpr (std::is_same_v<T, PcMode>)
+          return 3;
         return 0;
       },
       m);
@@ -24,11 +32,16 @@ int mode_to_index(const AIMode &m) {
 
 AIMode index_to_mode(int idx) {
   switch (idx) {
-  case 0: return AtkMode{};
-  case 1: return WellMode{};
-  case 2: return DownMode{};
-  case 3: return PcMode{};
-  default: return AtkMode{};
+  case 0:
+    return AtkMode{};
+  case 1:
+    return WellMode{};
+  case 2:
+    return DownMode{};
+  case 3:
+    return PcMode{};
+  default:
+    return AtkMode{};
   }
 }
 
@@ -154,7 +167,8 @@ void AIState::on_garbage(int lines) {
   if (!active)
     return;
   // Offset remaining plan steps rather than invalidating
-  for (int i = plan_.current_step; i < static_cast<int>(plan_.steps.size()); ++i)
+  for (int i = plan_.current_step; i < static_cast<int>(plan_.steps.size());
+       ++i)
     plan_.steps[i].placement.y += lines;
   needs_search = true;
 }
@@ -333,13 +347,11 @@ void AIState::fill_plan_overlay(ViewModel &vm, const GameState &state) const {
   vm.plan_overlay = build_plan_overlay(sim, remaining, max_visible);
 }
 
-void AIState::draw_sidebar(AIController &ai_ctrl) {
-  if (!show_debug_window)
-    return;
-  if (!ImGui::CollapsingHeader("AI Debug", ImGuiTreeNodeFlags_DefaultOpen))
+void AIState::draw_ai_controls(AIController &ai_ctrl) {
+  if (!ImGui::CollapsingHeader("AI", ImGuiTreeNodeFlags_DefaultOpen))
     return;
 
-  if (ImGui::BeginTable("##ctrl", 2, ImGuiTableFlags_SizingStretchProp)) {
+  if (ImGui::BeginTable("##ctrl", 2, ImGuiTableFlags_SizingFixedSame)) {
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
     ImGui::TextUnformatted("Active");
@@ -347,48 +359,49 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     if (ImGui::Checkbox("##active", &active))
       if (active) needs_search = true;
 
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::TextUnformatted("Autoplay");
-    ImGui::TableNextColumn();
-    ImGui::Checkbox("##autoplay", &autoplay);
+    if (active) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted("Autoplay");
+      ImGui::TableNextColumn();
+      ImGui::Checkbox("##autoplay", &autoplay);
 
-    if (autoplay) {
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
-      ImGui::TextUnformatted("Real movement");
-      ImGui::TableNextColumn();
-      bool real = ai_ctrl.input_mode() == AIInputMode::RealInputs;
-      if (ImGui::Checkbox("##realmove", &real))
-        ai_ctrl.set_input_mode(real ? AIInputMode::RealInputs
-                                    : AIInputMode::DirectPlacement);
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
-      ImGui::TextUnformatted("Speed");
-      ImGui::TableNextColumn();
-      int speed = 1000 - ai_ctrl.interval_ms();
-      ImGui::SetNextItemWidth(-FLT_MIN);
-      if (ImGui::SliderInt("##speed", &speed, 0, 1000))
-        ai_ctrl.set_interval_ms(1000 - speed);
+      if (autoplay) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Real movement");
+        ImGui::TableNextColumn();
+        bool real = ai_ctrl.input_mode() == AIInputMode::RealInputs;
+        if (ImGui::Checkbox("##realmove", &real))
+          ai_ctrl.set_input_mode(real ? AIInputMode::RealInputs
+                                      : AIInputMode::DirectPlacement);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Speed");
+        ImGui::TableNextColumn();
+        int speed = 1000 - ai_ctrl.interval_ms();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##speed", &speed, 0, 1000))
+          ai_ctrl.set_interval_ms(1000 - speed);
 
-      // Commit window: 0 means "play the entire PV" (legacy). Any positive
-      // value forces a re-search after that many plan steps, discarding
-      // the speculative tail of the previous PV.
+        // Commit window: 0 means "play the entire PV" (legacy). Any positive
+        // value forces a re-search after that many plan steps, discarding
+        // the speculative tail of the previous PV.
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Commit");
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::SliderInt("##commit", &plan_commit_limit, 0, 10);
+      }
+
       ImGui::TableNextRow();
       ImGui::TableNextColumn();
-      ImGui::TextUnformatted("Commit");
+      ImGui::TextUnformatted("Preview");
       ImGui::TableNextColumn();
       ImGui::SetNextItemWidth(-FLT_MIN);
-      ImGui::SliderInt("##commit", &plan_commit_limit, 0, 10);
+      ImGui::SliderInt("##preview", &max_visible, 0, 15);
     }
-
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::TextUnformatted("Preview");
-    ImGui::TableNextColumn();
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::SliderInt("##preview", &max_visible, 0, 15);
-
     ImGui::EndTable();
   }
 
@@ -399,7 +412,8 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     ImGui::SetNextItemWidth(-FLT_MIN);
     if (ImGui::Combo("##mode", &cur, mode_labels, 4)) {
       mode = index_to_mode(cur);
-      if (active) needs_search = true;
+      if (active)
+        needs_search = true;
     }
   }
 
@@ -411,7 +425,8 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     ImGui::TableNextColumn();
     ImGui::SetNextItemWidth(-FLT_MIN);
     if (ImGui::SliderInt("##depth", &overrides.depth, 1, 20))
-      if (active) needs_search = true;
+      if (active)
+        needs_search = true;
 
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
@@ -419,15 +434,17 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     ImGui::TableNextColumn();
     ImGui::SetNextItemWidth(-FLT_MIN);
     if (ImGui::SliderInt("##beam", &overrides.width, 1, 2000))
-      if (active) needs_search = true;
+      if (active)
+        needs_search = true;
 
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
-    ImGui::TextUnformatted("Lookahead");
+    ImGui::TextUnformatted("Preview");
     ImGui::TableNextColumn();
     ImGui::SetNextItemWidth(-FLT_MIN);
-    if (ImGui::SliderInt("##lookahead", &queue_lookahead, 1, 15))
-      if (active) needs_search = true;
+    if (ImGui::SliderInt("##preview", &queue_lookahead, 1, 15))
+      if (active)
+        needs_search = true;
 
     ImGui::EndTable();
   }
@@ -435,21 +452,16 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
   ImGui::Separator();
   {
     bool busy = searching();
-    ImVec4 color = busy ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                        : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+    ImVec4 color =
+        busy ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::TextColored(color, "●");
     ImGui::SameLine();
   }
 
   if (searching()) {
-    const char *what = std::holds_alternative<PcMode>(mode) &&
-                               plan_source_ == PlanSource::None
-                           ? "Searching (PC)..."
-                           : "Searching...";
-    ImGui::TextUnformatted(what);
+    ImGui::TextUnformatted("Searching...");
   } else if (plan_computed()) {
-    const char *tag = plan_source_ == PlanSource::PerfectClear ? " [PC]" : "";
-    ImGui::Text("Plan: %d steps%s", (int)plan_.steps.size(), tag);
+    ImGui::Text("Plan: %d steps", (int)plan_.steps.size());
   } else {
     ImGui::TextUnformatted("No plan");
   }
@@ -482,22 +494,17 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
 
     ImGui::Text("Init board: %+.1f", initial_board);
 
-    if (ImGui::BeginTable("##pv_eval", 6,
+    if (ImGui::BeginTable("##pv_eval", 5,
                           ImGuiTableFlags_Borders |
                               ImGuiTableFlags_SizingFixedFit |
                               ImGuiTableFlags_RowBg)) {
-      ImGui::TableSetupColumn("#");
       ImGui::TableSetupColumn("Move");
-      ImGui::TableSetupColumn("Spin/L");
+      ImGui::TableSetupColumn("Spin:L");
       ImGui::TableSetupColumn("Tact");
       ImGui::TableSetupColumn("\xce\xa3Tact"); // "ΣTact"
       ImGui::TableSetupColumn("Board");
       ImGui::TableHeadersRow();
 
-      // PieceType enum order: I, O, T, S, Z, J, L
-      static constexpr char kPieceChar[] = "IOTSZJL";
-      // SpinKind enum order: None, Mini, TSpin, AllSpin
-      static const char *kSpinLabel[] = {"-", "mini", "Tspin", "allspin"};
 
       for (int i = 0; i < static_cast<int>(plan_.steps.size()); ++i) {
         const auto &step = plan_.steps[i];
@@ -527,15 +534,13 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
                                  IM_COL32(40, 80, 120, 120));
 
         ImGui::TableNextColumn();
-        ImGui::Text("%d", i);
-        ImGui::TableNextColumn();
-        ImGui::Text("%s%c %d,%d r%d", step.uses_hold ? "*" : "",
+        ImGui::Text("%c%c %c,%d,%d",
                     kPieceChar[static_cast<int>(step.placement.type)],
-                    step.placement.x, step.placement.y,
-                    static_cast<int>(step.placement.rotation));
+                    step.uses_hold ? '*' : ' ',
+                    kRotChar[static_cast<int>(step.placement.rotation)],
+                    step.placement.x, step.placement.y);
         ImGui::TableNextColumn();
-        ImGui::Text("%s/%d",
-                    kSpinLabel[static_cast<int>(step.placement.spin)],
+        ImGui::Text("%s:%d", kSpinLabel[static_cast<int>(step.placement.spin)],
                     step.lines_cleared);
         ImGui::TableNextColumn();
         ImGui::Text("%+.1f", tact);
@@ -577,10 +582,6 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
     if (!has_last_move_) {
       ImGui::TextDisabled("Last move: (none yet)");
     } else {
-      // PieceType order: I,O,T,S,Z,J,L
-      static constexpr char kPieceChar[] = "IOTSZJL";
-      static const char *kSpinLabel[] = {"-", "mini", "Tspin", "allspin"};
-
       Placement p{};
       p.type = last_move_.type;
       p.rotation = last_move_.rotation;
@@ -602,19 +603,13 @@ void AIState::draw_sidebar(AIController &ai_ctrl) {
       float tact = eval->tactical_eval(p, last_move_.lines_cleared,
                                        last_move_.attack, parent);
 
-      ImGui::Text("Last: %c @ (%d,%d) r%d  %s/%dL  atk=%d",
+      ImGui::Text("Last: %c @ (%d,%d,%c)  %s/%dL  atk=%d",
                   kPieceChar[static_cast<int>(p.type)], p.x, p.y,
-                  static_cast<int>(p.rotation),
+                  kRotChar[static_cast<int>(p.rotation)],
                   kSpinLabel[static_cast<int>(p.spin)],
                   last_move_.lines_cleared, last_move_.attack);
-      ImGui::Text("  prev combo=%d, b2b=%d \xe2\x86\x92 new combo=%d, b2b=%d",
-                  last_move_.prev_combo, parent_b2b_, last_move_.new_combo,
-                  last_move_.new_b2b);
-      ImGui::Text("  tactical_eval: %+.2f", tact);
+      ImGui::Text("  tactical: %+.2f", tact);
 
-      // For convenience, show what an AI would call the "move score" for
-      // this placement: parent_board_eval + tactical. Lets the user
-      // compare directly against the PV's per-step numbers above.
       SearchState parent_for_board = parent;
       float parent_board_score = eval->board_eval(parent_for_board);
       float after_board_score = cur_board_score;
