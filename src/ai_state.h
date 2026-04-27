@@ -21,7 +21,6 @@ public:
   bool active = false;
   bool autoplay = false;
   bool needs_search = false;
-  bool show_debug_window = false;
   int max_visible = 7;       // plan steps shown in overlay
   int queue_lookahead = 5;   // preview pieces fed to the beam (excludes current)
   // Autoplay commit window. After this many plan steps have been played,
@@ -54,9 +53,11 @@ public:
   void deactivate();         // clear_search_state() + flips active/autoplay off
 
   // --- Rendering ---
-  bool has_sidebar() const { return show_debug_window; }
   void fill_plan_overlay(ViewModel &vm, const GameState &state) const;
-  void draw_sidebar(AIController &ai_ctrl);
+  // Renders the AI section into the current ImGui region. Caller (the debug
+  // panel) decides whether to show the panel at all and supplies the layout
+  // around this section.
+  void draw_ai_controls(AIController &ai_ctrl);
 
 private:
   std::unique_ptr<BeamTask> beam_task_;

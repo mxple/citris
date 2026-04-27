@@ -7,7 +7,9 @@
 #include "ai_state.h"
 #include "controller/ai_controller.h"
 #include "controller/controller.h"
+#include "debug_state.h"
 #include "presets/game_mode.h"
+#include "ui/debug_panel.h"
 
 static void fmt_time(char *buf, size_t n, float secs) {
   int total_ms = static_cast<int>(secs * 1000);
@@ -292,7 +294,8 @@ void draw_board_decorations(const ViewModel &vm, const CellLayout &layout) {
 // always sits on its right edge).
 float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
                          std::span<IController *> ctrls, AIState *ai,
-                         AIController *ai_ctrl) {
+                         AIController *ai_ctrl, DebugState &debug,
+                         const GameState &state) {
   static bool s_open = true;
   static bool s_prev_had_content = false;
   static float s_width = 0.f;
@@ -302,7 +305,7 @@ float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
   if (!has_content)
     for (auto *c : ctrls)
       if (c->has_sidebar()) { has_content = true; break; }
-  if (!has_content && ai && ai->has_sidebar())
+  if (!has_content && debug_panel_has_content(debug))
     has_content = true;
 
   if (!has_content)
@@ -333,7 +336,7 @@ float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
     ImGui::Begin("##sidebar", nullptr, kFlags);
     if (mode) mode->draw_sidebar();
     for (auto *c : ctrls) c->draw_sidebar();
-    if (ai && ai_ctrl) ai->draw_sidebar(*ai_ctrl);
+    draw_debug_panel(debug, ai, ai_ctrl, state);
     ImGui::End();
     content_w = s_width;
   }
@@ -399,8 +402,9 @@ constexpr ImGuiWindowFlags kOverlayFlags =
 void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
                    const Settings &settings, GameMode *mode,
                    std::span<IController *> ctrls, AIState *ai,
-                   AIController *ai_ctrl) {
-  float sidebar_w = draw_sidebar_panel(window, mode, ctrls, ai, ai_ctrl);
+                   AIController *ai_ctrl, DebugState &debug) {
+  float sidebar_w = draw_sidebar_panel(window, mode, ctrls, ai, ai_ctrl, debug,
+                                        vm.state);
   CellLayout layout = compute_cell_layout(window, settings, sidebar_w);
   if (layout.cell_px <= 0.f) return;
 

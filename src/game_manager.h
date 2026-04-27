@@ -17,6 +17,7 @@
 #include <vector>
 
 class AIController;
+class ToolController;
 
 class GameManager {
 public:
@@ -53,6 +54,8 @@ private:
   // AI
   AIState ai_state_;
   AIController *ai_controller_ = nullptr; // owned by controllers_
+
+  ToolController *tool_controller_ = nullptr;
 
   // Versus (null in single-player). Each player owns its own GameMode
   // instance because GameMode carries per-instance start_time_.

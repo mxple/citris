@@ -10,6 +10,7 @@ class GameMode;
 class IController;
 class AIState;
 class AIController;
+struct DebugState;
 
 // Draws the in-game ImGui UI: sidebar panel (left), hold panel, stats panel,
 // board panel (center), preview panel (right).
@@ -17,7 +18,7 @@ class AIController;
 void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
                   const Settings &settings, GameMode *mode,
                   std::span<IController *> ctrls, AIState *ai,
-                  AIController *ai_ctrl);
+                  AIController *ai_ctrl, DebugState &debug);
 
 // Versus variant: renders two boards side-by-side with per-player HUDs and
 // a pending-garbage meter between each board and its opponent. No sidebar.

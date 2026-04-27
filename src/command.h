@@ -1,7 +1,9 @@
 #pragma once
 
 #include "ai/placement.h"
+#include "engine/piece.h"
 #include "notification.h"
+#include <vector>
 
 enum class GameInput : int {
   Left,
@@ -43,12 +45,20 @@ struct Place {
 struct Passthrough {
   Notification notification;
 };
+struct ReplaceQueuePrefix {
+  std::vector<PieceType> pieces;
+};
+struct ReplaceCurrentPiece {
+  PieceType type;
+};
+struct ClearHold {};
 } // namespace cmd
 
 using Command = std::variant<cmd::MovePiece, cmd::SetARRDirection,
                              cmd::SetSoftDropActive, cmd::AddGarbage,
                              cmd::SetGameOver, cmd::Undo, cmd::Place,
-                             cmd::Passthrough>;
+                             cmd::Passthrough, cmd::ReplaceQueuePrefix,
+                             cmd::ReplaceCurrentPiece, cmd::ClearHold>;
 
 class CommandBuffer {
 public:

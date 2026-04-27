@@ -31,17 +31,17 @@ GameManager::GameManager(SDL_Renderer *renderer, SDL_Window *window,
   // PlayerController + AIController for a TbpController and leave the
   // ai_state_/ai_controller_ inert (ai_state_.active stays false).
   auto p1_bot = mode_->make_player_bot(0);
+  auto tool_ctrl = std::make_unique<ToolController>(settings_, *mode_, ai_state_);
+  tool_controller_ = tool_ctrl.get();
   if (p1_bot) {
-    controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_,
-                                                              ai_state_));
+    controllers_.push_back(std::move(tool_ctrl));
     controllers_.push_back(std::make_unique<TbpController>(
         std::move(p1_bot), mode_->think_time_ms(0)));
   } else {
     auto ai_ctrl = std::make_unique<AIController>();
     ai_controller_ = ai_ctrl.get();
     controllers_.push_back(std::make_unique<PlayerController>(settings_));
-    controllers_.push_back(std::make_unique<ToolController>(settings_, *mode_,
-                                                              ai_state_));
+    controllers_.push_back(std::move(tool_ctrl));
     controllers_.push_back(std::move(ai_ctrl));
   }
   game_renderer_ = std::make_unique<Renderer>(renderer_, settings_);
@@ -239,7 +239,8 @@ run_start:
       for (auto &c : controllers_)
         ctrl_ptrs.push_back(c.get());
       draw_game_ui(*game_renderer_, window_, vm, settings_, mode_.get(),
-                   ctrl_ptrs, &ai_state_, ai_controller_);
+                   ctrl_ptrs, &ai_state_, ai_controller_,
+                   tool_controller_->debug());
     }
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);

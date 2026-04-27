@@ -56,6 +56,37 @@ void Game::apply(const CommandBuffer &cmds) {
           if constexpr (std::is_same_v<T, cmd::Passthrough>) {
             pending_events_.push_back(c.notification);
           }
+          if constexpr (std::is_same_v<T, cmd::ReplaceQueuePrefix>) {
+            int n = static_cast<int>(c.pieces.size());
+            if (n > 0) {
+              queue_.peek(n);
+              int buffered = queue_.buffered();
+              int limit = std::min(n, buffered);
+              for (int i = 0; i < limit; ++i)
+                queue_.replace(i, c.pieces[i]);
+              dirty_ = true;
+            }
+          }
+          if constexpr (std::is_same_v<T, cmd::ReplaceCurrentPiece>) {
+            // Mirror spawn_piece minus the queue pop and snapshot push
+            current_piece_ = Piece(c.type);
+            piece_gen_++;
+            lock_resets_remaining_ = mode_.max_lock_resets();
+            last_move_was_rotation_ = false;
+            gravity_deadline_.reset();
+            lock_delay_deadline_.reset();
+            if (!top_out()) {
+              pending_events_.push_back(eng::PieceSpawned{current_piece_.type});
+              settle();
+              arm_gravity();
+            }
+            dirty_ = true;
+          }
+          if constexpr (std::is_same_v<T, cmd::ClearHold>) {
+            hold_piece_.reset();
+            hold_available_ = true;
+            dirty_ = true;
+          }
         },
         cmd);
   }
