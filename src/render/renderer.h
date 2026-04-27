@@ -68,7 +68,7 @@ private:
   void draw_ghost(const Piece &ghost);
   void draw_mini_piece(PieceType type, bool greyed, float region_col,
                        float region_y_up);
-  void draw_plan_overlay(const std::vector<PlannedPlacement> &placements);
+  void draw_plan_overlay(const std::vector<OverlayCell> &cells);
   // Vertical amber bar, drawn inside the scene texture just left of the
   // playfield. Height is proportional to `pending_lines` and clamped to the
   // playfield height so it can never overflow the scene bounds.

@@ -5,7 +5,6 @@
 #include "ai/movegen.h"
 #include "ai/pathfinder.h"
 #include "ai/plan.h"
-#include "ai/plan_overlay.h"
 #include "command.h"
 #include "engine/board.h"
 #include "engine/piece.h"

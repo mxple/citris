@@ -1,11 +1,11 @@
 #pragma once
 
+#include "ai/plan.h"
 #include "engine/game_state.h"
 #include "engine/piece.h"
 #include "match.h"
 #include "stats.h"
 #include "vec2.h"
-#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,18 +27,11 @@ struct HudData {
   int pending_garbage_lines = 0;
 };
 
-// A single planned piece placement for the overlay.
-struct PlannedPlacement {
-  std::array<Vec2, 4> cells;   // absolute board coordinates (adjusted for prior clears)
-  PieceType type;
-  int step_number = 0;
-};
-
 struct ViewModel {
   GameState state;
   Stats::Snapshot stats;
   std::optional<HudData> hud;
-  std::vector<PlannedPlacement> plan_overlay;  // empty when no plan active
+  std::vector<OverlayCell> plan_overlay; // empty when no plan active
 };
 
 // Two-player view model for versus mode. Each side has the same shape as a

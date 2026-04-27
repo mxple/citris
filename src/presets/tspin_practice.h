@@ -2,7 +2,6 @@
 
 #include "ai/board_bitset.h"
 #include "ai/plan.h"
-#include "ai/plan_overlay.h"
 #include "ai/puzzle_gen.h"
 #include "engine/board.h"
 #include "engine/piece_queue.h"
@@ -177,6 +176,7 @@ public:
     }
     board = current_.board;
     pieces_placed_ = 0;
+    solution_plan_ = Plan::from_placements(current_.solution);
     tsds_ = 0;
     tsts_ = 0;
     quads_ = 0;
@@ -188,6 +188,11 @@ public:
   void on_piece_locked(const eng::PieceLocked &ev, const GameState &state,
                        CommandBuffer &cmds) override {
     pieces_placed_++;
+    // Hint advance is goal-set semantics — the player may play in any order,
+    // so we let the plan match the locked piece against any remaining step.
+    solution_plan_.advance(
+        Placement{ev.type, ev.rotation, (int8_t)ev.x, (int8_t)ev.y});
+
     if (ev.spin == SpinKind::TSpin && ev.lines_cleared == 2)
       tsds_++;
     if (ev.spin == SpinKind::TSpin && ev.lines_cleared == 3)
@@ -227,33 +232,22 @@ public:
                     static_cast<int>(state.queue.size());
     pieces_placed_ = std::max(0, total - in_system);
     no_float_ok_ = no_floating_cells(state.board);
+    // We don't keep per-placement undo snapshots, so reset the remaining-set
+    // to the full solution. Cost: undoing partway shows hints for already-
+    // played placements again. Benefit: stays correct under out-of-order play
+    // and never shows fewer hints than truth.
+    solution_plan_ = Plan::from_placements(current_.solution);
   }
 
   // Expose the reverse-constructed downstack solution as a plan overlay.
   // `show_hints_` gates visibility so the player can toggle spoilers on/off.
   void fill_plan_overlay(ViewModel &vm, const GameState &state) override {
-    if (!show_hints_)
+    if (!show_hints_ || solution_plan_.empty())
       return;
-    if (pieces_placed_ >= static_cast<int>(current_.solution.size()))
-      return;
-
-    auto remaining =
-        std::span<const Placement>(current_.solution).subspan(pieces_placed_);
-
-    // Wrap placements as Plan::Step so we can reuse build_plan_overlay's
-    // line-clear-aware row_map logic. We only populate `placement`;
-    // uses_hold / lines_cleared / board_after are unused by the overlay.
-    std::vector<Plan::Step> steps;
-    steps.reserve(remaining.size());
-    for (const auto &p : remaining) {
-      Plan::Step s{};
-      s.placement = p;
-      steps.push_back(s);
-    }
-
     BoardBitset sim = BoardBitset::from_board(state.board);
-    vm.plan_overlay =
-        build_plan_overlay(sim, steps, static_cast<int>(steps.size()));
+    vm.plan_overlay = build_plan_overlay(
+        sim, solution_plan_.remaining,
+        static_cast<int>(solution_plan_.size()));
   }
 
   void fill_hud(HudData &hud, const GameState &state, TimePoint now) override {
@@ -447,6 +441,7 @@ private:
   bool last_was_win_ = false;
   bool pending_restart_ = false;
   int pieces_placed_ = 0;
+  Plan solution_plan_;
   int tsds_ = 0;
   int tsts_ = 0;
   int quads_ = 0;

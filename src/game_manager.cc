@@ -267,10 +267,10 @@ void GameManager::process_engine_events(TimePoint now,
     bool undo = stats_.process_event(ev, now);
 
     if (auto *pl = std::get_if<eng::PieceLocked>(&ev)) {
-      ai_state_.on_piece_locked(*pl);
+      ai_state_.on_piece_locked(*pl, game_->state());
       mode_->on_piece_locked(*pl, game_->state(), rule_cmds);
     } else if (auto *gm = std::get_if<eng::GarbageMaterialized>(&ev)) {
-      ai_state_.on_garbage(gm->lines);
+      ai_state_.on_garbage(gm->lines, game_->state());
     } else if (auto *n = std::get_if<Notification>(&ev)) {
       if (auto *ir = std::get_if<note::InputRegistered>(n))
         mode_->on_input_registered(ir->input, game_->state());
@@ -303,12 +303,17 @@ void GameManager::pump_ai(TimePoint now, const GameState &state) {
     ai_state_.needs_search = false;
   }
 
-  // Feed placement to AIController when plan is ready and autoplay is on
+  // Feed placement to AIController when plan is ready and autoplay is on.
+  // check_feasibility() reordered remaining[] so the front step's piece type
+  // is reachable in one input — either it matches the current piece directly
+  // (uses_hold=false) or is the hold target (uses_hold=true). The boolean
+  // therefore reduces to a type comparison.
   if (ai_state_.autoplay && ai_state_.plan_computed() &&
-      !ai_state_.current_plan().complete() && /*!ai_state_.searching() &&*/
+      ai_state_.current_plan().feasible && !ai_state_.current_plan().empty() &&
       ai_controller_->idle()) {
-    auto &step = *ai_state_.current_plan().current();
-    ai_controller_->set_placement(step.placement, step.uses_hold);
+    auto &step = *ai_state_.current_plan().front();
+    bool uses_hold = state.current_piece.type != step.placement.type;
+    ai_controller_->set_placement(step.placement, uses_hold);
   }
 }
 

@@ -328,22 +328,19 @@ void Renderer::draw_garbage_meter(int pending_lines) {
              Color(255, 154, 40, 230));
 }
 
-void Renderer::draw_plan_overlay(
-    const std::vector<PlannedPlacement> &placements) {
+void Renderer::draw_plan_overlay(const std::vector<OverlayCell> &cells) {
   constexpr float t = L::kTileSize;
-  for (auto &pp : placements) {
-    int skin = piece_to_skin(pp.type);
-    auto alpha = static_cast<uint8_t>(settings_.plan_opacity);
-    Color tint(255, 255, 255, alpha);
-    for (auto &cell : pp.cells) {
-      if (cell.y < 0 || cell.y >= L::kPlayRows + L::kPadRowsNorth)
-        continue;
-      if (cell.x < 0 || cell.x >= L::kBoardCols)
-        continue;
-      float px = (L::kBoardColX + cell.x) * t;
-      float py = row_px(cell.y);
-      draw_tile(px, py, skin, tint);
-    }
+  auto alpha = static_cast<uint8_t>(settings_.plan_opacity);
+  Color tint(255, 255, 255, alpha);
+  for (auto &cell : cells) {
+    if (cell.pos.y < 0 || cell.pos.y >= L::kPlayRows + L::kPadRowsNorth)
+      continue;
+    if (cell.pos.x < 0 || cell.pos.x >= L::kBoardCols)
+      continue;
+    int skin = piece_to_skin(cell.type);
+    float px = (L::kBoardColX + cell.pos.x) * t;
+    float py = row_px(cell.pos.y);
+    draw_tile(px, py, skin, tint);
   }
 }
 

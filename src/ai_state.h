@@ -46,8 +46,8 @@ public:
   // --- Lifecycle ---
   void start_search(const GameState &state);
   bool poll_search(); // returns true if a search just completed
-  void on_piece_locked(const eng::PieceLocked &ev);
-  void on_garbage(int lines);
+  void on_piece_locked(const eng::PieceLocked &ev, const GameState &state);
+  void on_garbage(int lines, const GameState &state);
   void on_undo();
   void clear_search_state(); // tasks + plan + needs_search; preserves config
   void deactivate();         // clear_search_state() + flips active/autoplay off
@@ -87,4 +87,12 @@ private:
   void build_plan_from_beam(const BeamResult &result);
   void build_plan_from_pc(const PcResult &result);
   void start_beam_fallback();
+
+  // --- Rendering helpers (sections of draw_ai_controls) ---
+  void draw_control_table(AIController &ai_ctrl);
+  void draw_mode_selector();
+  void draw_search_params();
+  void draw_search_status();
+  void draw_pv_evaluation();
+  void draw_player_eval();
 };
