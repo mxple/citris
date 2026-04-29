@@ -1,0 +1,18 @@
+[submodule "dist/SDL"]
+	path = dist/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "dist/SDL_image"]
+	path = dist/SDL_image
+	url = https://github.com/libsdl-org/SDL_image.git
+[submodule "dist/imgui"]
+	path = dist/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "dist/json"]
+	path = dist/json
+	url = https://github.com/nlohmann/json.git
+[submodule "dist/spdlog"]
+	path = dist/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "dist/opencv"]
+	path = dist/opencv
+	url = https://github.com/opencv/opencv.git

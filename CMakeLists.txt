@@ -1,9 +1,4 @@
 cmake_minimum_required(VERSION 3.16)
-
-# Disable vcpkg's applocal DLL copy (requires PowerShell); we bundle DLLs via install()
-set(VCPKG_APPLOCAL_DEPS OFF CACHE BOOL "")
-set(X_VCPKG_APPLOCAL_DEPS_INSTALL OFF CACHE BOOL "")
-
 project(citris LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -22,67 +17,78 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-s")
 
 if(EMSCRIPTEN)
-  # Enable pthreads globally so FetchContent deps (SDL3, etc.) are built with atomics
   add_compile_options(-pthread)
-
-  # --- Emscripten: fetch dependencies instead of vcpkg ---
-  include(FetchContent)
-
-  FetchContent_Declare(SDL3
-    URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.14/SDL3-3.2.14.tar.gz
-  )
-  FetchContent_Declare(SDL3_image
-    URL https://github.com/libsdl-org/SDL_image/releases/download/release-3.2.4/SDL3_image-3.2.4.tar.gz
-  )
-  FetchContent_Declare(imgui_src
-    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.8.tar.gz
-  )
-  FetchContent_Declare(nlohmann_json
-    URL https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
-  )
-  FetchContent_Declare(spdlog
-    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
-  )
-
-  set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-  set(SDL_STATIC ON CACHE BOOL "" FORCE)
-  set(SDL3IMAGE_SHARED OFF CACHE BOOL "" FORCE)
-  set(SDL3IMAGE_STATIC ON CACHE BOOL "" FORCE)
-  set(SDL3IMAGE_JPG OFF CACHE BOOL "" FORCE)
-  set(SDL3IMAGE_WEBP OFF CACHE BOOL "" FORCE)
-  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
-
-  FetchContent_MakeAvailable(SDL3 SDL3_image)
-  FetchContent_MakeAvailable(imgui_src)
-  FetchContent_MakeAvailable(nlohmann_json)
-  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(spdlog)
-
-  # Build ImGui as a static library from fetched sources
-  add_library(imgui_lib STATIC
-    ${imgui_src_SOURCE_DIR}/imgui.cpp
-    ${imgui_src_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_src_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_src_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_src_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_src_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_src_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
-  )
-  target_include_directories(imgui_lib PUBLIC
-    ${imgui_src_SOURCE_DIR}
-    ${imgui_src_SOURCE_DIR}/backends
-  )
-  target_link_libraries(imgui_lib PUBLIC SDL3::SDL3)
-
-  # Alias so the rest of the build can use imgui::imgui uniformly
-  add_library(imgui::imgui ALIAS imgui_lib)
-else()
-  find_package(SDL3 REQUIRED)
-  find_package(SDL3_image REQUIRED)
-  find_package(imgui CONFIG REQUIRED)
-  find_package(nlohmann_json CONFIG REQUIRED)
-  find_package(spdlog CONFIG REQUIRED)
 endif()
+
+# --- All platforms: use vendored submodules from dist/ ---
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDLIMAGE_DEPS_SHARED OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_JPG OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_TIF OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)
+set(SDLIMAGE_JXL OFF CACHE BOOL "" FORCE)
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(dist/SDL EXCLUDE_FROM_ALL)
+add_subdirectory(dist/SDL_image EXCLUDE_FROM_ALL)
+add_subdirectory(dist/json EXCLUDE_FROM_ALL)
+add_subdirectory(dist/spdlog EXCLUDE_FROM_ALL)
+
+# OpenCV: minimal static build (core + imgproc only)
+set(BUILD_LIST "core,imgproc" CACHE STRING "" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_PERF_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_apps OFF CACHE BOOL "" FORCE)
+set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_python3 OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_python_bindings_generator OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_java OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_js OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_gapi OFF CACHE BOOL "" FORCE)
+set(WITH_JPEG OFF CACHE BOOL "" FORCE)
+set(WITH_PNG OFF CACHE BOOL "" FORCE)
+set(WITH_TIFF OFF CACHE BOOL "" FORCE)
+set(WITH_WEBP OFF CACHE BOOL "" FORCE)
+set(WITH_OPENEXR OFF CACHE BOOL "" FORCE)
+set(WITH_PROTOBUF OFF CACHE BOOL "" FORCE)
+set(WITH_QUIRC OFF CACHE BOOL "" FORCE)
+set(WITH_OPENCL OFF CACHE BOOL "" FORCE)
+set(WITH_ITT OFF CACHE BOOL "" FORCE)
+set(WITH_EIGEN OFF CACHE BOOL "" FORCE)
+set(WITH_LAPACK OFF CACHE BOOL "" FORCE)
+set(CV_TRACE OFF CACHE BOOL "" FORCE)
+set(OPENCV_GENERATE_PKGCONFIG OFF CACHE BOOL "" FORCE)
+set(WITH_IPP OFF CACHE BOOL "" FORCE)
+if(EMSCRIPTEN)
+  set(WITH_PTHREADS_PF OFF CACHE BOOL "" FORCE)
+  set(CV_ENABLE_INTRINSICS OFF CACHE BOOL "" FORCE)
+  set(CPU_BASELINE "" CACHE STRING "" FORCE)
+  set(CPU_DISPATCH "" CACHE STRING "" FORCE)
+endif()
+add_subdirectory(dist/opencv EXCLUDE_FROM_ALL)
+
+# ImGui — no CMakeLists.txt upstream, build as static lib from sources
+set(IMGUI_DIR "${CMAKE_SOURCE_DIR}/dist/imgui")
+add_library(imgui_lib STATIC
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/imgui_demo.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+target_include_directories(imgui_lib PUBLIC
+  ${IMGUI_DIR}
+  ${IMGUI_DIR}/backends
+)
+target_link_libraries(imgui_lib PUBLIC SDL3::SDL3)
+add_library(imgui::imgui ALIAS imgui_lib)
 
 # Embed font as C header via xxd
 set(FONT_INPUT "${CMAKE_SOURCE_DIR}/assets/FreeMono.otf")
@@ -111,6 +117,7 @@ file(GLOB LIB_SOURCES
   "src/ai/pc/*.cc"
   "src/ai/eval/*.cc"
   "src/tbp/*.cc"
+  "src/cv/*.cc"
 )
 add_library(tetris_lib STATIC ${LIB_SOURCES})
 target_precompile_headers(tetris_lib PUBLIC src/pch.h)
@@ -125,9 +132,15 @@ target_include_directories(tetris_lib PUBLIC
   src/ai/pc
   src/ai/eval
   src/tbp
+  src/cv
   "${CMAKE_BINARY_DIR}/generated"
 )
-target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(tetris_lib PUBLIC SDL3::SDL3 SDL3_image::SDL3_image imgui::imgui nlohmann_json::nlohmann_json spdlog::spdlog opencv_core opencv_imgproc)
+target_include_directories(tetris_lib PUBLIC
+  "${CMAKE_SOURCE_DIR}/dist/opencv/modules/core/include"
+  "${CMAKE_SOURCE_DIR}/dist/opencv/modules/imgproc/include"
+  "${CMAKE_BINARY_DIR}"
+)
 if(NOT EMSCRIPTEN)
   target_link_libraries(tetris_lib PUBLIC Threads::Threads)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -185,13 +198,8 @@ else()
   install(DIRECTORY assets/ DESTINATION assets)
   install(FILES assets/default_settings.ini DESTINATION . RENAME settings.ini)
 
-  # On Windows, bundle shared libs next to the exe
+  # On Windows (MinGW cross-compile), bundle runtime DLLs
   if(WIN32)
-    # Collect SDL (and transitive) DLLs from vcpkg
-    install(DIRECTORY "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/"
-      DESTINATION . FILES_MATCHING PATTERN "*.dll")
-
-    # MinGW runtime DLLs — search compiler dir, sysroot, and common cross-compile paths
     get_filename_component(_compiler_dir ${CMAKE_CXX_COMPILER} DIRECTORY)
     file(GLOB _mingw_dlls
       "${_compiler_dir}/libstdc++-6.dll"

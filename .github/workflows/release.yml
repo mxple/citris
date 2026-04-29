@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install system dependencies
         run: |
@@ -23,13 +25,9 @@ jobs:
             libudev-dev libdbus-1-dev libpulse-dev libasound2-dev libdecor-0-dev \
             libfreetype-dev libxtst-dev
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
             -DCPACK_PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Build
@@ -52,16 +50,13 @@ jobs:
         run: pacman -Syu --noconfirm base-devel git mingw-w64-gcc cmake vim zip unzip curl tar pkg-config
 
       - uses: actions/checkout@v4
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        with:
+          submodules: recursive
 
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$PWD/cmake/mingw-w64-x86_64.cmake \
-            -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/cmake/mingw-w64-x86_64.cmake \
             -DCPACK_PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Build
@@ -80,14 +75,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        with:
+          submodules: recursive
 
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
             -DCPACK_PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Build
