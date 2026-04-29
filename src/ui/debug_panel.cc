@@ -1,4 +1,5 @@
 #include "ui/debug_panel.h"
+#include "ui/ai_debug_panel.h"
 #include "ui/piece_ui.h"
 
 #include "ai_state.h"
@@ -89,7 +90,7 @@ void draw_debug_panel(DebugState &dbg, AIState *ai, AIController *ai_ctrl,
   }
 
   if (ai && ai_ctrl)
-    ai->draw_ai_controls(*ai_ctrl);
+    draw_ai_controls(*ai, *ai_ctrl);
 
   // Modal lives on top of all sidebar content; draw it after the panel so
   // late-frame interaction wins. The function no-ops when the modal is closed.

@@ -7,6 +7,7 @@
 #include "engine/game_state.h"
 #include "engine_event.h"
 #include <memory>
+#include <span>
 
 class AIController;
 struct ViewModel;
@@ -16,7 +17,7 @@ enum class PlanSource { None, BeamSearch, PerfectClear };
 class AIState {
 public:
   // --- Config: mutable by UI ---
-  AIMode mode = AtkMode{};
+  AIMode mode = AIMode::Atk;
   BeamOverrides overrides;
   bool active = false;
   bool autoplay = false;
@@ -54,10 +55,15 @@ public:
 
   // --- Rendering ---
   void fill_plan_overlay(ViewModel &vm, const GameState &state) const;
-  // Renders the AI section into the current ImGui region. Caller (the debug
-  // panel) decides whether to show the panel at all and supplies the layout
-  // around this section.
-  void draw_ai_controls(AIController &ai_ctrl);
+
+  // --- Debug accessors (read-only, used by ui/ai_debug_panel) ---
+  const BeamInput &last_input() const { return last_input_; }
+  const BoardBitset &last_board() const { return last_board_; }
+  const BoardBitset &parent_board() const { return parent_board_; }
+  const eng::PieceLocked &last_move() const { return last_move_; }
+  bool has_last_move() const { return has_last_move_; }
+  int tracked_b2b() const { return tracked_b2b_; }
+  int parent_b2b() const { return parent_b2b_; }
 
 private:
   std::unique_ptr<BeamTask> beam_task_;
@@ -84,15 +90,9 @@ private:
   int tracked_b2b_ = 0;      // rolling; updated each PieceLocked to ev.new_b2b
   int parent_b2b_ = 0;       // snapshot of tracked_b2b_ BEFORE the last move
 
+  void build_plan(std::span<const Placement> pv);
   void build_plan_from_beam(const BeamResult &result);
   void build_plan_from_pc(const PcResult &result);
   void start_beam_fallback();
 
-  // --- Rendering helpers (sections of draw_ai_controls) ---
-  void draw_control_table(AIController &ai_ctrl);
-  void draw_mode_selector();
-  void draw_search_params();
-  void draw_search_status();
-  void draw_pv_evaluation();
-  void draw_player_eval();
 };
