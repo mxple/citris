@@ -48,6 +48,32 @@ public:
           ai_.needs_search = true;
       }
     }
+    bool imported = false;
+    if (debug_.pending_board_import) {
+      cmds.push(cmd::SetBoardCells{std::move(*debug_.pending_board_import)});
+      debug_.pending_board_import.reset();
+      imported = true;
+    }
+    if (debug_.pending_hold_import) {
+      cmds.push(cmd::SetHoldPiece{*debug_.pending_hold_import});
+      debug_.pending_hold_import.reset();
+      imported = true;
+    }
+    if (debug_.pending_current_import) {
+      cmds.push(cmd::ReplaceCurrentPiece{*debug_.pending_current_import});
+      debug_.pending_current_import.reset();
+      imported = true;
+    }
+    if (debug_.pending_queue_import) {
+      auto pieces = std::move(*debug_.pending_queue_import);
+      debug_.pending_queue_import.reset();
+      if (!pieces.empty()) {
+        cmds.push(cmd::ReplaceQueuePrefix{std::move(pieces)});
+        imported = true;
+      }
+    }
+    if (imported && ai_.active)
+      ai_.needs_search = true;
   }
 
   std::optional<TimePoint> next_deadline() const override { return std::nullopt; }

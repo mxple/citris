@@ -1,5 +1,7 @@
 #pragma once
 
+#include <SDL3/SDL.h>
+
 struct DebugState;
 struct GameState;
 class AIState;
@@ -15,8 +17,11 @@ class AIController;
 // `state` is the live engine snapshot — sections that need to display or
 // inspect current game state read from it (queue editor uses state.queue
 // for the input hint; future sections can read whatever they need).
+//
+// `renderer` is the SDL renderer; the clipboard-import flow uses it to
+// create a preview texture. May be null when debug UI doesn't need it.
 void draw_debug_panel(DebugState &dbg, AIState *ai, AIController *ai_ctrl,
-                      const GameState &state);
+                      const GameState &state, SDL_Renderer *renderer);
 
 // Sidebar visibility query — used by the panel layout to decide whether to
 // allocate sidebar real estate before any drawing happens.

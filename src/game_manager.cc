@@ -6,6 +6,7 @@
 #include "tbp/bot.h"
 #include "tbp/internal_bot.h"
 #include "ui/game_ui.h"
+#include "ui/import_modal.h"
 
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
@@ -126,12 +127,13 @@ run_start:
                          static_cast<unsigned>(ev.window.data2)});
         break;
       case SDL_EVENT_KEY_DOWN:
-        if (!ev.key.repeat && !io.WantCaptureKeyboard)
+        if (!ev.key.repeat && !io.WantCaptureKeyboard
+            && !imp::import_modal_is_open())
           input_events.push_back(
               KeyDown{ev.key.key, TimePoint(Duration(ev.key.timestamp))});
         break;
       case SDL_EVENT_KEY_UP:
-        if (!io.WantCaptureKeyboard)
+        if (!io.WantCaptureKeyboard && !imp::import_modal_is_open())
           input_events.push_back(
               KeyUp{ev.key.key, TimePoint(Duration(ev.key.timestamp))});
         break;

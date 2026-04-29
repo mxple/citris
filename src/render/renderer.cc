@@ -1,21 +1,10 @@
 #include "renderer.h"
+#include "colors.h"
 #include <SDL3_image/SDL_image.h>
 #include <algorithm>
 #include <iostream>
 
 using L = RenderLayout;
-
-static constexpr Color kFallbackColors[] = {
-    Color::Transparent(), // Empty
-    Color(135, 206, 250), // I
-    Color(255, 255, 0),   // O
-    Color(186, 85, 211),  // T
-    Color(50, 205, 50),   // S
-    Color(255, 105, 180), // Z
-    Color(30, 144, 255),  // J
-    Color(255, 165, 0),   // L
-    Color(128, 128, 128), // Garbage
-};
 
 // Convert a scene-local y_up (0 = bottom of the scene, kSceneRows-1 = top) to
 // the pixel Y of the top edge of that cell inside the scene texture.
@@ -286,7 +275,7 @@ void Renderer::draw_tile(float x, float y, int tile_idx, Color tint) {
     static constexpr int kSkinToCellColor[] = {5, 7, 2, 4, 1, 6,
                                                3, 0, 8, 8, 0, 0};
     int cc = kSkinToCellColor[tile_idx];
-    auto base = kFallbackColors[cc];
+    auto base = kCellRefColors[cc];
     Color c(base.r, base.g, base.b,
             static_cast<uint8_t>(base.a * tint.a / 255));
     draw_solid(dst, c);

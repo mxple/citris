@@ -1,6 +1,8 @@
 #pragma once
 
+#include "engine/board.h"
 #include "engine/piece.h"
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -24,4 +26,15 @@ struct DebugState {
   // One-shot clear-hold request from the debug panel. GameManager pushes
   // cmd::ClearHold and resets this flag.
   bool clear_hold = false;
+
+  // Clipboard-import side channel. Each optional is set by the import modal
+  // when the user applies a step; ToolController::tick() drains it into the
+  // matching Command and resets. Steps are independent — the user may import
+  // only the board, only the hold piece, etc.
+  using BoardCells =
+      std::array<std::array<CellColor, Board::kWidth>, Board::kTotalHeight>;
+  std::optional<BoardCells> pending_board_import;
+  std::optional<PieceType> pending_hold_import;
+  std::optional<PieceType> pending_current_import;
+  std::optional<std::vector<PieceType>> pending_queue_import;
 };

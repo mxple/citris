@@ -16,6 +16,10 @@
       ]
     },
     "nlohmann-json",
-    "spdlog"
+    "spdlog",
+    {
+      "name": "opencv4",
+      "default-features": false
+    }
   ]
 }

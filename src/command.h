@@ -1,8 +1,10 @@
 #pragma once
 
 #include "ai/placement.h"
+#include "engine/board.h"
 #include "engine/piece.h"
 #include "notification.h"
+#include <array>
 #include <vector>
 
 enum class GameInput : int {
@@ -52,13 +54,23 @@ struct ReplaceCurrentPiece {
   PieceType type;
 };
 struct ClearHold {};
+struct SetHoldPiece {
+  PieceType type;
+};
+// Whole-board overwrite — used by the clipboard-import debug tool to paint
+// a board state from a screenshot. The 40-row buffer matches Board's storage;
+// row 0 is the bottom of the board.
+struct SetBoardCells {
+  std::array<std::array<CellColor, Board::kWidth>, Board::kTotalHeight> cells;
+};
 } // namespace cmd
 
 using Command = std::variant<cmd::MovePiece, cmd::SetARRDirection,
                              cmd::SetSoftDropActive, cmd::AddGarbage,
                              cmd::SetGameOver, cmd::Undo, cmd::Place,
                              cmd::Passthrough, cmd::ReplaceQueuePrefix,
-                             cmd::ReplaceCurrentPiece, cmd::ClearHold>;
+                             cmd::ReplaceCurrentPiece, cmd::ClearHold,
+                             cmd::SetHoldPiece, cmd::SetBoardCells>;
 
 class CommandBuffer {
 public:

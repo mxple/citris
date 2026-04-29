@@ -57,6 +57,10 @@ public:
   static int cell_to_skin(CellColor cc);
   static int piece_to_skin(PieceType type);
 
+  // Underlying SDL renderer — exposed so debug UI can create its own textures
+  // (clipboard-image preview) without owning a separate SDL_Renderer handle.
+  SDL_Renderer *sdl_renderer() const { return renderer_; }
+
 private:
   void load_skin();
 

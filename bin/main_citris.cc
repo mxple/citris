@@ -22,20 +22,20 @@ static void setup_imgui_style() {
   ImGuiStyle &style = ImGui::GetStyle();
   ImGui::StyleColorsDark();
 
-  style.WindowRounding = 6.f;
-  style.ChildRounding = 6.f;
+  style.WindowRounding = 4.f;
+  style.ChildRounding = 4.f;
   style.FrameRounding = 4.f;
-  style.PopupRounding = 6.f;
-  style.ScrollbarRounding = 6.f;
+  style.PopupRounding = 4.f;
+  style.ScrollbarRounding = 4.f;
   style.GrabRounding = 4.f;
   style.TabRounding = 4.f;
   style.WindowBorderSize = 0.f;
   style.FrameBorderSize = 0.f;
   style.PopupBorderSize = 0.f;
-  style.WindowPadding = ImVec2(12, 12);
-  style.FramePadding = ImVec2(8, 5);
-  style.ItemSpacing = ImVec2(8, 6);
-  style.ItemInnerSpacing = ImVec2(6, 4);
+  style.WindowPadding = ImVec2(6, 6);
+  style.FramePadding = ImVec2(3, 3);
+  style.ItemSpacing = ImVec2(3, 3);
+  style.ItemInnerSpacing = ImVec2(3, 3);
   style.IndentSpacing = 20.f;
   style.ScrollbarSize = 12.f;
   style.GrabMinSize = 10.f;

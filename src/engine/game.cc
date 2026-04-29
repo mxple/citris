@@ -87,6 +87,19 @@ void Game::apply(const CommandBuffer &cmds) {
             hold_available_ = true;
             dirty_ = true;
           }
+          if constexpr (std::is_same_v<T, cmd::SetHoldPiece>) {
+            // Mirrors ClearHold's intent: debug injection re-arms hold so the
+            // user can swap immediately after import.
+            hold_piece_ = c.type;
+            hold_available_ = true;
+            dirty_ = true;
+          }
+          if constexpr (std::is_same_v<T, cmd::SetBoardCells>) {
+            for (int r = 0; r < Board::kTotalHeight; ++r)
+              for (int col = 0; col < Board::kWidth; ++col)
+                board_.set_cell(col, r, c.cells[r][col]);
+            dirty_ = true;
+          }
         },
         cmd);
   }

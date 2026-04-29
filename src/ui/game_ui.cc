@@ -292,7 +292,8 @@ void draw_board_decorations(const ViewModel &vm, const CellLayout &layout) {
 // Draws the left sidebar panel and returns the total horizontal space it
 // occupies (sidebar contents + the full-height toggle/resize handle that
 // always sits on its right edge).
-float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
+float draw_sidebar_panel(SDL_Window *window, SDL_Renderer *sdl_renderer,
+                         GameMode *mode,
                          std::span<IController *> ctrls, AIState *ai,
                          AIController *ai_ctrl, DebugState &debug,
                          const GameState &state) {
@@ -336,7 +337,7 @@ float draw_sidebar_panel(SDL_Window *window, GameMode *mode,
     ImGui::Begin("##sidebar", nullptr, kFlags);
     if (mode) mode->draw_sidebar();
     for (auto *c : ctrls) c->draw_sidebar();
-    draw_debug_panel(debug, ai, ai_ctrl, state);
+    draw_debug_panel(debug, ai, ai_ctrl, state, sdl_renderer);
     ImGui::End();
     content_w = s_width;
   }
@@ -403,8 +404,8 @@ void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
                    const Settings &settings, GameMode *mode,
                    std::span<IController *> ctrls, AIState *ai,
                    AIController *ai_ctrl, DebugState &debug) {
-  float sidebar_w = draw_sidebar_panel(window, mode, ctrls, ai, ai_ctrl, debug,
-                                        vm.state);
+  float sidebar_w = draw_sidebar_panel(window, renderer.sdl_renderer(), mode,
+                                        ctrls, ai, ai_ctrl, debug, vm.state);
   CellLayout layout = compute_cell_layout(window, settings, sidebar_w);
   if (layout.cell_px <= 0.f) return;
 
