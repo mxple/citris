@@ -6,7 +6,7 @@
 #include <SDL3/SDL.h>
 #include <span>
 
-class GameMode;
+class ModeHooks;
 class IController;
 class AIState;
 class AIController;
@@ -16,7 +16,7 @@ struct DebugState;
 // board panel (center), preview panel (right).
 // The renderer is used to produce the board/mini-piece textures.
 void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
-                  const Settings &settings, GameMode *mode,
+                  const Settings &settings, ModeHooks *mode,
                   std::span<IController *> ctrls, AIState *ai,
                   AIController *ai_ctrl, DebugState &debug);
 

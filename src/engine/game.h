@@ -11,11 +11,11 @@
 #include <queue>
 #include <vector>
 
-class GameMode;
+class ModeRules;
 
 class Game {
 public:
-  Game(const GameMode &mode, Board board, unsigned seed = std::random_device{}());
+  Game(const ModeRules &mode, Board board, unsigned seed = std::random_device{}());
 
   void apply(const CommandBuffer &cmds);
   void tick(TimePoint now);
@@ -117,7 +117,7 @@ private:
   static constexpr int kMaxUndoDepth = 100;
   std::deque<GameSnapshot> undo_stack_;
 
-  const GameMode &mode_;
+  const ModeRules &mode_;
   Board board_;
   Piece current_piece_{PieceType::I};
   std::optional<PieceType> hold_piece_;

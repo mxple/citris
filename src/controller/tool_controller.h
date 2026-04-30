@@ -3,7 +3,7 @@
 #include "ai_state.h"
 #include "controller.h"
 #include "debug_state.h"
-#include "presets/game_mode.h"
+#include "presets/mode_rules.h"
 #include "settings.h"
 
 // Owns the F3 debug-panel state and the auxiliary "tools" inputs (undo).
@@ -13,7 +13,7 @@
 // scattered across GameManager.
 class ToolController : public IController {
 public:
-  ToolController(const Settings &settings, const GameMode &mode, AIState &ai)
+  ToolController(const Settings &settings, const ModeRules &mode, AIState &ai)
       : undo_key_(settings.undo), debug_key_(settings.debug_menu),
         undo_allowed_(mode.undo_allowed()), ai_(ai) {}
 

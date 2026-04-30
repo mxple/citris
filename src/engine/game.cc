@@ -2,12 +2,12 @@
 #include "board_bitset.h"
 #include "log.h"
 #include "movegen.h"
-#include "presets/game_mode.h"
+#include "presets/mode_rules.h"
 #include "srs.h"
 #include <algorithm>
 #include <spdlog/fmt/fmt.h>
 
-Game::Game(const GameMode &mode, Board board, unsigned seed)
+Game::Game(const ModeRules &mode, Board board, unsigned seed)
     : mode_(mode), board_(std::move(board)), queue_(mode_.create_queue(seed)) {
   now_ = SdlClock::now();
   // Emit QueueRefill for each piece the source appends to the buffer.

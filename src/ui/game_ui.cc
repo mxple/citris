@@ -8,7 +8,7 @@
 #include "controller/ai_controller.h"
 #include "controller/controller.h"
 #include "debug_state.h"
-#include "presets/game_mode.h"
+#include "presets/mode_hooks.h"
 #include "ui/debug_panel.h"
 
 static void fmt_time(char *buf, size_t n, float secs) {
@@ -293,7 +293,7 @@ void draw_board_decorations(const ViewModel &vm, const CellLayout &layout) {
 // occupies (sidebar contents + the full-height toggle/resize handle that
 // always sits on its right edge).
 float draw_sidebar_panel(SDL_Window *window, SDL_Renderer *sdl_renderer,
-                         GameMode *mode,
+                         ModeHooks *mode,
                          std::span<IController *> ctrls, AIState *ai,
                          AIController *ai_ctrl, DebugState &debug,
                          const GameState &state) {
@@ -401,7 +401,7 @@ constexpr ImGuiWindowFlags kOverlayFlags =
 } // namespace
 
 void draw_game_ui(Renderer &renderer, SDL_Window *window, const ViewModel &vm,
-                   const Settings &settings, GameMode *mode,
+                   const Settings &settings, ModeHooks *mode,
                    std::span<IController *> ctrls, AIState *ai,
                    AIController *ai_ctrl, DebugState &debug) {
   float sidebar_w = draw_sidebar_panel(window, renderer.sdl_renderer(), mode,
